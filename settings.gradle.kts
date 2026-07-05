@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "picsearch"
+rootProject.name = "boardmark"
 include(":app")

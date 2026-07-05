@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.picsearch.app"
+    namespace = "com.boardmark.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.picsearch.app"
+        applicationId = "com.boardmark.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

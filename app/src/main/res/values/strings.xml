@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">PicSearch</string>
+    <string name="app_name">Boardmark</string>
     <string name="empty_state_message">共有機能からWebページを追加してください</string>
     <string name="search_placeholder">ブックマークを検索</string>
     <string name="sort_date_desc">追加日が新しい順</string>
