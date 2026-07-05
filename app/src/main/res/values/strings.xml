@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PicSearch</string>
+    <string name="empty_state_message">共有機能からWebページを追加してください</string>
+    <string name="search_placeholder">ブックマークを検索</string>
+    <string name="sort_date_desc">追加日が新しい順</string>
+    <string name="sort_name_asc">名前順</string>
+    <string name="delete_confirm_title">削除しますか？</string>
+    <string name="delete_confirm_message">このブックマークを削除します</string>
+    <string name="delete_confirm_ok">削除</string>
+    <string name="delete_confirm_cancel">キャンセル</string>
+    <string name="toast_bookmark_added">ブックマークに追加しました</string>
+    <string name="toast_bookmark_already_exists">すでに保存済みです</string>
+    <string name="toast_url_not_recognized">URLを認識できませんでした</string>
+    <string name="choose_thumbnail">サムネイルを選択</string>
+    <string name="thumbnail_size_small">サムネイル: 小</string>
+    <string name="thumbnail_size_medium">サムネイル: 中</string>
+    <string name="thumbnail_size_large">サムネイル: 大</string>
+    <string name="selection_count">%1$d件選択中</string>
+    <string name="action_move">移動</string>
+    <string name="move_to_top_level">トップレベル（フォルダ解除）</string>
+    <string name="move_to_new_folder">＋ 新規フォルダを作成</string>
+    <string name="new_folder_name_hint">フォルダ名</string>
+    <string name="new_folder_create">作成</string>
+    <string name="delete_folder_action">フォルダを削除</string>
+    <string name="delete_folder_confirm_title">フォルダを削除しますか？</string>
+    <string name="delete_folder_confirm_message">中のブックマークはトップレベルに戻ります</string>
+    <string name="delete_selection_confirm_message">選択したブックマークを削除します</string>
+    <string name="move_to_folder_title">移動先を選択</string>
+    <string name="export_bookmarks_action">ブックマークをエクスポート</string>
+    <string name="share_folder_as_image_action">画像として共有</string>
+    <string name="folder_collage_no_images">共有できる画像がありません</string>
+    <string name="rename_folder_action">フォルダ名を変更</string>
+    <string name="rename_folder_title">フォルダ名を変更</string>
+    <string name="rename_folder_confirm">変更</string>
+</resources>
