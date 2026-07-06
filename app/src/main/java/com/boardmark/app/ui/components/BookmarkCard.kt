@@ -2,14 +2,21 @@ package com.boardmark.app.ui.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +48,8 @@ fun BookmarkCard(
     bookmark: Bookmark,
     isSelected: Boolean,
     selectionMode: Boolean,
+    isDragActive: Boolean = false,
+    isDropTarget: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val domain = domainOf(bookmark.url)
@@ -53,17 +63,33 @@ fun BookmarkCard(
         }
     }
 
-    Column(modifier = modifier.scale(cardScale.value)) {
+    // ドラッグ中(自分がつままれている側)は少し拡大したまま浮かせ、
+    // 「動かせる/動いている」ことを視覚的に伝え続ける。
+    val liftScale by animateFloatAsState(
+        targetValue = if (isDragActive) 1.06f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "liftScale",
+    )
+
+    Column(modifier = modifier.scale(cardScale.value * liftScale)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp)),
+                .aspectRatio(CardThumbnailAspectRatio)
+                .clip(RoundedCornerShape(12.dp))
+                .then(
+                    if (isDropTarget) {
+                        Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+                    } else {
+                        Modifier
+                    },
+                ),
         ) {
-            // ロード中/画像なしのプレースホルダーは固定比率、実画像は縦横比を保って
-            // 幅いっぱいに表示することでマソンリー(可変高さ)レイアウトを実現する。
+            // サムネの縦横比を固定しContentScale.Cropで揃えることで、画像の実際の
+            // アスペクト比に関わらずカードの見た目の大きさを統一する。
             when (bookmark.fetchStatus) {
                 FetchStatus.PENDING -> {
-                    Box(modifier = Modifier.fillMaxWidth().aspectRatio(1.4f).background(Color.LightGray)) {
+                    Box(modifier = Modifier.fillMaxWidth().aspectRatio(CardThumbnailAspectRatio).background(Color.LightGray)) {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center).padding(24.dp))
                     }
                 }
@@ -73,11 +99,11 @@ fun BookmarkCard(
                         AsyncImage(
                             model = imageUrl,
                             contentDescription = bookmark.title,
-                            contentScale = ContentScale.FillWidth,
-                            modifier = Modifier.fillMaxWidth(),
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxWidth().aspectRatio(CardThumbnailAspectRatio),
                         )
                     } else {
-                        DomainPlaceholder(domain = domain, modifier = Modifier.fillMaxWidth().aspectRatio(1.4f))
+                        DomainPlaceholder(domain = domain, modifier = Modifier.fillMaxWidth().aspectRatio(CardThumbnailAspectRatio))
                     }
                 }
             }
@@ -114,9 +140,12 @@ fun BookmarkCard(
             }
         }
 
+        // タイトルは常に2行分の高さを確保し、1行で収まる場合も余白は保持する
+        // (カードごとに高さがぶれないようにするため)。
         Text(
             text = bookmark.title ?: domain,
             style = MaterialTheme.typography.titleMedium,
+            minLines = 2,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
@@ -128,15 +157,28 @@ fun BookmarkCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        if (!bookmark.description.isNullOrBlank()) {
-            Text(
-                text = bookmark.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 2.dp),
-            )
+        // ラベルの有無・個数に関わらず高さを固定し(横スクロールで収める)、
+        // カードの縦サイズがラベル数によってばらつかないようにする。
+        Box(modifier = Modifier.fillMaxWidth().height(CardMetaRowHeight).padding(top = 4.dp)) {
+            if (bookmark.labels.isNotEmpty()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                ) {
+                    bookmark.labels.forEach { label ->
+                        Text(
+                            text = label.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }

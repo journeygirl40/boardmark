@@ -63,7 +63,7 @@ class BookmarkDaoTest {
         val results = dao.observeAllRaw().first()
 
         assertEquals(1, results.size)
-        assertEquals("Example", results[0].title)
+        assertEquals("Example", results[0].bookmark.title)
     }
 
     @Test
@@ -96,7 +96,7 @@ class BookmarkDaoTest {
         val results = dao.observeByFolder(folderId, "Cat").first()
 
         assertEquals(1, results.size)
-        assertEquals("Cute Cats", results[0].title)
+        assertEquals("Cute Cats", results[0].bookmark.title)
     }
 
     @Test
@@ -147,6 +147,6 @@ class BookmarkDaoTest {
 
         val remaining = dao.observeAllRaw().first()
         assertEquals(1, remaining.size)
-        assertEquals(id2, remaining[0].id)
+        assertEquals(id2, remaining[0].bookmark.id)
     }
 }

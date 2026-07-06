@@ -32,8 +32,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.boardmark.app.R
 
 @Composable
 fun ThumbnailPickerDialog(
@@ -53,23 +55,29 @@ fun ThumbnailPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("サムネイルを選択") },
+        title = { Text(stringResource(R.string.choose_thumbnail)) },
         text = {
             Column {
                 OutlinedButton(onClick = onPickFromWebPage, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Crop, contentDescription = null)
-                    Text(text = "ページの画面から範囲を選ぶ", modifier = Modifier.padding(start = 8.dp))
+                    Text(
+                        text = stringResource(R.string.thumbnail_pick_from_webpage),
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
                 }
                 OutlinedButton(
                     onClick = onPickFromGallery,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 ) {
                     Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
-                    Text(text = "端末の写真から選ぶ", modifier = Modifier.padding(start = 8.dp))
+                    Text(
+                        text = stringResource(R.string.thumbnail_pick_from_gallery),
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
                 }
 
                 Text(
-                    text = "ページ内の画像から選ぶ",
+                    text = stringResource(R.string.thumbnail_pick_from_page_images),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
                 )
@@ -81,7 +89,7 @@ fun ThumbnailPickerDialog(
                         }
                         candidates.isEmpty() -> {
                             Text(
-                                text = "ページから画像が見つかりませんでした",
+                                text = stringResource(R.string.thumbnail_no_images_found),
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.align(Alignment.Center).padding(16.dp),
                             )
@@ -111,7 +119,7 @@ fun ThumbnailPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("閉じる") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
         },
     )
 }

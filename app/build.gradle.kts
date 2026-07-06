@@ -54,6 +54,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.activity.compose)
 
     implementation(platform(libs.androidx.compose.bom))
@@ -83,8 +84,10 @@ dependencies {
     implementation(libs.coil.network.okhttp)
 
     implementation(libs.androidx.browser)
+    implementation(libs.androidx.appcompat)
 
     implementation(libs.play.services.ads)
+    implementation(libs.billing.ktx)
 
     implementation(libs.kotlinx.coroutines.android)
 

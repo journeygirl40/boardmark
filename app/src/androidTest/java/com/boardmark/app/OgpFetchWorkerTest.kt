@@ -11,6 +11,7 @@ import androidx.work.workDataOf
 import com.boardmark.app.data.remote.OgpFetcher
 import com.boardmark.app.domain.model.Bookmark
 import com.boardmark.app.domain.model.FetchStatus
+import com.boardmark.app.domain.model.Label
 import com.boardmark.app.domain.repository.BookmarkRepository
 import com.boardmark.app.domain.repository.TopLevelListing
 import com.boardmark.app.domain.model.Folder
@@ -156,6 +157,41 @@ class OgpFetchWorkerTest {
             throw UnsupportedOperationException()
 
         override suspend fun getAllForExport(): Pair<List<Bookmark>, List<Folder>> =
+            throw UnsupportedOperationException()
+
+        override suspend fun renameBookmark(bookmark: Bookmark, title: String): Unit =
+            throw UnsupportedOperationException()
+
+        override suspend fun reorderBookmark(bookmarkId: Long, order: Double): Unit =
+            throw UnsupportedOperationException()
+
+        override suspend fun setFolderDefaultBrowser(folderId: Long, packageName: String?): Unit =
+            throw UnsupportedOperationException()
+
+        override suspend fun importBookmarksFromHtml(html: String): Int =
+            throw UnsupportedOperationException()
+
+        override fun observeLabels(): Flow<List<Label>> = throw UnsupportedOperationException()
+
+        override suspend fun setBookmarkLabels(bookmarkId: Long, labelNames: Set<String>): Unit =
+            throw UnsupportedOperationException()
+
+        override suspend fun countBookmarksForLabel(labelId: Long): Int =
+            throw UnsupportedOperationException()
+
+        override suspend fun renameLabel(labelId: Long, newName: String): Unit =
+            throw UnsupportedOperationException()
+
+        override suspend fun deleteLabel(labelId: Long): Unit =
+            throw UnsupportedOperationException()
+
+        override suspend fun incrementViewCount(bookmarkId: Long): Unit =
+            throw UnsupportedOperationException()
+
+        override suspend fun getUnresolvedDuplicateGroups(): List<List<Bookmark>> =
+            throw UnsupportedOperationException()
+
+        override suspend fun ignoreDuplicateGroup(url: String): Unit =
             throw UnsupportedOperationException()
     }
 }

@@ -3,7 +3,7 @@ package com.boardmark.app.ui.share
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.boardmark.app.R
 import com.boardmark.app.domain.repository.BookmarkRepository
@@ -13,7 +13,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
-class ShareReceiverActivity : ComponentActivity() {
+class ShareReceiverActivity : AppCompatActivity() {
 
     @Inject lateinit var repository: BookmarkRepository
 

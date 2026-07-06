@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -29,9 +30,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.boardmark.app.R
 import com.boardmark.app.domain.model.FolderWithPreview
 import com.boardmark.app.util.domainOf
 import kotlin.math.abs
@@ -66,7 +69,7 @@ fun FolderTile(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1.4f)
+                .aspectRatio(CardThumbnailAspectRatio)
                 .clip(RoundedCornerShape(12.dp))
                 .background(accentColor.copy(alpha = 0.25f)),
         ) {
@@ -137,6 +140,9 @@ fun FolderTile(
             }
         }
 
+        // タイトル/サブタイトル/下部余白の高さをBookmarkCardと完全に揃えることで、
+        // フォルダ名の行数やブックマーク側のラベル有無に関わらず、同じ行に並んだ
+        // カード同士のサムネの高さ・縦位置が常に一致するようにする。
         Row(modifier = Modifier.padding(top = 6.dp)) {
             Box(
                 modifier = Modifier
@@ -147,9 +153,18 @@ fun FolderTile(
             Text(
                 text = data.folder.name,
                 style = MaterialTheme.typography.titleMedium,
+                minLines = 2,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        Text(
+            text = stringResource(R.string.folder_item_count, data.itemCount),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Box(modifier = Modifier.fillMaxWidth().height(CardMetaRowHeight).padding(top = 4.dp))
     }
 }

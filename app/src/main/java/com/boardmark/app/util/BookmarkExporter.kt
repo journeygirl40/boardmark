@@ -7,56 +7,52 @@ import com.boardmark.app.domain.model.Bookmark
 import com.boardmark.app.domain.model.Folder
 import java.io.File
 
-/**
- * ブックマーク/フォルダをJSONへ書き出す。手書きシリアライズなのは、この程度のフラットな
- * データ構造に外部JSONライブラリを導入するほどではないため(既存のutil関数群も外部依存なし)。
- */
 object BookmarkExporter {
 
-    fun toJson(bookmarks: List<Bookmark>, folders: List<Folder>): String {
-        val foldersJson = folders.joinToString(",") { folder ->
-            """{"id":${folder.id},"name":${jsonString(folder.name)},"createdAt":${jsonString(folder.createdAt.toString())}}"""
-        }
-        val bookmarksJson = bookmarks.joinToString(",") { bookmark ->
-            "{" +
-                """"id":${bookmark.id},""" +
-                """"url":${jsonString(bookmark.url)},""" +
-                """"originalUrl":${jsonString(bookmark.originalUrl)},""" +
-                """"title":${jsonStringOrNull(bookmark.title)},""" +
-                """"description":${jsonStringOrNull(bookmark.description)},""" +
-                """"siteName":${jsonStringOrNull(bookmark.siteName)},""" +
-                """"ogImageUrl":${jsonStringOrNull(bookmark.ogImageUrl)},""" +
-                """"faviconUrl":${jsonStringOrNull(bookmark.faviconUrl)},""" +
-                """"fetchStatus":${jsonString(bookmark.fetchStatus.name)},""" +
-                """"addedAt":${jsonString(bookmark.addedAt.toString())},""" +
-                """"folderId":${bookmark.folderId ?: "null"}""" +
-                "}"
-        }
-        return """{"folders":[$foldersJson],"bookmarks":[$bookmarksJson]}"""
-    }
-
-    /** JSONをキャッシュディレクトリへ書き出し、共有可能なcontent:// Uriを返す。 */
-    fun saveToCacheAndGetUri(context: Context, json: String): Uri {
-        val dir = File(context.cacheDir, "exports").apply { mkdirs() }
-        val file = File(dir, "boardmark_export_${System.currentTimeMillis()}.json")
-        file.writeText(json)
-        return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-    }
-
-    private fun jsonStringOrNull(value: String?): String = if (value == null) "null" else jsonString(value)
-
-    private fun jsonString(value: String): String = buildString {
-        append('"')
-        for (c in value) {
-            when (c) {
-                '"' -> append("\\\"")
-                '\\' -> append("\\\\")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> if (c.code < 0x20) append("\\u%04x".format(c.code)) else append(c)
+    /**
+     * ブラウザ間で共有されているNetscape Bookmark File Format(Chrome/Firefox等がHTML
+     * エクスポートに使う形式)へ書き出す。フォルダは1階層のみ(このアプリ自体がネストを
+     * 持たないため)。
+     */
+    fun toNetscapeHtml(bookmarks: List<Bookmark>, folders: List<Folder>): String {
+        val byFolder = bookmarks.groupBy { it.folderId }
+        return buildString {
+            append("<!DOCTYPE NETSCAPE-Bookmark-file-1>\n")
+            append("<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n")
+            append("<TITLE>Bookmarks</TITLE>\n")
+            append("<H1>Bookmarks</H1>\n")
+            append("<DL><p>\n")
+            byFolder[null].orEmpty().forEach { appendBookmarkLine(it, indent = 1) }
+            folders.forEach { folder ->
+                append("    <DT><H3 ADD_DATE=\"${folder.createdAt.epochSecond}\">${escapeHtml(folder.name)}</H3>\n")
+                append("    <DL><p>\n")
+                byFolder[folder.id].orEmpty().forEach { appendBookmarkLine(it, indent = 2) }
+                append("    </DL><p>\n")
             }
+            append("</DL><p>\n")
         }
-        append('"')
+    }
+
+    private fun StringBuilder.appendBookmarkLine(bookmark: Bookmark, indent: Int) {
+        val pad = "    ".repeat(indent)
+        val title = escapeHtml(bookmark.title ?: bookmark.url)
+        append("$pad<DT><A HREF=\"${escapeHtml(bookmark.url)}\" ADD_DATE=\"${bookmark.addedAt.epochSecond}\">$title</A>\n")
+    }
+
+    private fun escapeHtml(value: String): String = value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+
+    /** HTML(Netscapeブックマークファイル)をキャッシュディレクトリへ書き出し、共有可能なcontent:// Uriを返す。 */
+    fun saveHtmlToCacheAndGetUri(context: Context, html: String): Uri =
+        saveToCacheAndGetUri(context, html, extension = "html")
+
+    private fun saveToCacheAndGetUri(context: Context, content: String, extension: String): Uri {
+        val dir = File(context.cacheDir, "exports").apply { mkdirs() }
+        val file = File(dir, "boardmark_export_${System.currentTimeMillis()}.$extension")
+        file.writeText(content)
+        return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
 }

@@ -18,4 +18,7 @@ data class BookmarkEntity(
     val folderId: Long? = null,
     val description: String? = null,
     val siteName: String? = null,
+    val manualOrder: Double = 0.0,
+    val viewCount: Int = 0,
+    val duplicateIgnored: Boolean = false,
 )

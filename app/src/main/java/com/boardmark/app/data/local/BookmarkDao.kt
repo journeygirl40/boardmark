@@ -3,6 +3,7 @@ package com.boardmark.app.data.local
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.boardmark.app.domain.model.FetchStatus
 import java.time.Instant
@@ -17,14 +18,16 @@ interface BookmarkDao {
     @Update
     suspend fun update(entity: BookmarkEntity)
 
+    @Transaction
     @Query("SELECT * FROM bookmarks ORDER BY addedAt DESC")
-    fun observeAllRaw(): Flow<List<BookmarkEntity>>
+    fun observeAllRaw(): Flow<List<BookmarkWithLabels>>
 
+    @Transaction
     @Query(
         "SELECT * FROM bookmarks WHERE folderId = :folderId AND " +
             "(title LIKE '%' || :query || '%' OR url LIKE '%' || :query || '%') ORDER BY addedAt DESC"
     )
-    fun observeByFolder(folderId: Long, query: String): Flow<List<BookmarkEntity>>
+    fun observeByFolder(folderId: Long, query: String): Flow<List<BookmarkWithLabels>>
 
     @Query("UPDATE bookmarks SET folderId = :folderId WHERE id IN (:ids)")
     suspend fun moveToFolder(ids: List<Long>, folderId: Long?)
@@ -46,6 +49,25 @@ interface BookmarkDao {
 
     @Query("UPDATE bookmarks SET ogImageUrl = :imageUrl, fetchStatus = :status WHERE id = :id")
     suspend fun updateThumbnail(id: Long, imageUrl: String, status: FetchStatus)
+
+    @Query("UPDATE bookmarks SET title = :title WHERE id = :id")
+    suspend fun renameBookmark(id: Long, title: String)
+
+    @Query("UPDATE bookmarks SET manualOrder = :order WHERE id = :id")
+    suspend fun updateManualOrder(id: Long, order: Double)
+
+    @Query("UPDATE bookmarks SET viewCount = viewCount + 1 WHERE id = :id")
+    suspend fun incrementViewCount(id: Long)
+
+    /** URL単位で2件以上重複しているブックマークをすべて取得する(グループ化はKotlin側で行う)。 */
+    @Query(
+        "SELECT * FROM bookmarks WHERE url IN " +
+            "(SELECT url FROM bookmarks GROUP BY url HAVING COUNT(*) > 1)"
+    )
+    suspend fun findDuplicateCandidates(): List<BookmarkEntity>
+
+    @Query("UPDATE bookmarks SET duplicateIgnored = 1 WHERE url = :url")
+    suspend fun ignoreDuplicatesForUrl(url: String)
 
     @Query(
         "UPDATE bookmarks SET fetchStatus = :status, url = COALESCE(:finalUrl, url), " +

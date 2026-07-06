@@ -42,15 +42,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.boardmark.app.R
 import kotlin.coroutines.resume
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 private enum class CaptureMode { BROWSE, SELECT }
 
+private enum class DragTarget { NEW, MOVE, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
+
 private const val MIN_SELECTION_PX = 20f
+private val HANDLE_TOUCH_RADIUS = 24.dp
+private val HANDLE_DRAW_RADIUS = 6.dp
+
+private fun rectFromAnchor(anchor: Offset, point: Offset) = Rect(
+    left = minOf(anchor.x, point.x),
+    top = minOf(anchor.y, point.y),
+    right = maxOf(anchor.x, point.x),
+    bottom = maxOf(anchor.y, point.y),
+)
 
 /**
  * 対象URLの実際の描画結果をWebViewで表示し、ユーザーがドラッグで選んだ矩形を
@@ -70,29 +83,15 @@ fun WebThumbnailCaptureScreen(
     var mode by remember { mutableStateOf(CaptureMode.BROWSE) }
     var isLoading by remember { mutableStateOf(true) }
     var webView by remember { mutableStateOf<WebView?>(null) }
-    var dragStart by remember { mutableStateOf<Offset?>(null) }
-    var dragEnd by remember { mutableStateOf<Offset?>(null) }
+    var selection by remember { mutableStateOf<Rect?>(null) }
 
-    val start = dragStart
-    val end = dragEnd
-    val selectionRect = if (start != null && end != null) {
-        Rect(
-            left = minOf(start.x, end.x),
-            top = minOf(start.y, end.y),
-            right = maxOf(start.x, end.x),
-            bottom = maxOf(start.y, end.y),
-        )
-    } else {
-        null
-    }
-    val hasValidSelection = selectionRect != null &&
-        selectionRect.width > MIN_SELECTION_PX &&
-        selectionRect.height > MIN_SELECTION_PX
+    val hasValidSelection = selection?.let {
+        it.width > MIN_SELECTION_PX && it.height > MIN_SELECTION_PX
+    } ?: false
 
     fun exitSelectMode() {
         mode = CaptureMode.BROWSE
-        dragStart = null
-        dragEnd = null
+        selection = null
     }
 
     fun handleBack() {
@@ -109,7 +108,15 @@ fun WebThumbnailCaptureScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(if (mode == CaptureMode.SELECT) "サムネにしたい範囲をドラッグして選択" else "サムネにしたい画面を表示してください")
+                    Text(
+                        stringResource(
+                            if (mode == CaptureMode.SELECT) {
+                                R.string.capture_select_instruction
+                            } else {
+                                R.string.capture_browse_instruction
+                            },
+                        ),
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = ::handleBack) {
@@ -119,14 +126,17 @@ fun WebThumbnailCaptureScreen(
                 actions = {
                     if (mode == CaptureMode.BROWSE) {
                         IconButton(onClick = { mode = CaptureMode.SELECT }) {
-                            Icon(Icons.Filled.Crop, contentDescription = "範囲を選択")
+                            Icon(
+                                Icons.Filled.Crop,
+                                contentDescription = stringResource(R.string.capture_select_action),
+                            )
                         }
                     } else {
                         IconButton(
                             enabled = hasValidSelection,
                             onClick = {
                                 val wv = webView
-                                val rect = selectionRect
+                                val rect = selection
                                 if (wv != null && rect != null) {
                                     coroutineScope.launch {
                                         val bitmap = captureWebView(context, wv)
@@ -137,7 +147,10 @@ fun WebThumbnailCaptureScreen(
                                 }
                             },
                         ) {
-                            Icon(Icons.Filled.Check, contentDescription = "この範囲を使う")
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = stringResource(R.string.capture_use_selection_action),
+                            )
                         }
                     }
                 },
@@ -173,20 +186,62 @@ fun WebThumbnailCaptureScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .pointerInput(Unit) {
+                            val handleRadiusPx = HANDLE_TOUCH_RADIUS.toPx()
+                            var dragTarget = DragTarget.NEW
+                            var anchor = Offset.Zero
                             detectDragGestures(
                                 onDragStart = { offset ->
-                                    dragStart = offset
-                                    dragEnd = offset
+                                    val current = selection
+                                    dragTarget = when {
+                                        current == null -> DragTarget.NEW
+                                        (offset - current.topLeft).getDistance() <= handleRadiusPx ->
+                                            DragTarget.TOP_LEFT
+                                        (offset - current.topRight).getDistance() <= handleRadiusPx ->
+                                            DragTarget.TOP_RIGHT
+                                        (offset - current.bottomLeft).getDistance() <= handleRadiusPx ->
+                                            DragTarget.BOTTOM_LEFT
+                                        (offset - current.bottomRight).getDistance() <= handleRadiusPx ->
+                                            DragTarget.BOTTOM_RIGHT
+                                        current.contains(offset) -> DragTarget.MOVE
+                                        else -> DragTarget.NEW
+                                    }
+                                    anchor = when (dragTarget) {
+                                        DragTarget.NEW -> offset
+                                        DragTarget.TOP_LEFT -> current!!.bottomRight
+                                        DragTarget.TOP_RIGHT -> current!!.bottomLeft
+                                        DragTarget.BOTTOM_LEFT -> current!!.topRight
+                                        DragTarget.BOTTOM_RIGHT -> current!!.topLeft
+                                        DragTarget.MOVE -> Offset.Zero
+                                    }
+                                    if (dragTarget == DragTarget.NEW) {
+                                        selection = Rect(offset, offset)
+                                    }
                                 },
-                                onDrag = { change, _ ->
+                                onDrag = { change, dragAmount ->
                                     change.consume()
-                                    dragEnd = change.position
+                                    val maxWidth = size.width.toFloat()
+                                    val maxHeight = size.height.toFloat()
+                                    selection = if (dragTarget == DragTarget.MOVE) {
+                                        selection?.let { current ->
+                                            val translateX = dragAmount.x
+                                                .coerceIn(-current.left, maxWidth - current.right)
+                                            val translateY = dragAmount.y
+                                                .coerceIn(-current.top, maxHeight - current.bottom)
+                                            current.translate(translateX, translateY)
+                                        }
+                                    } else {
+                                        val point = Offset(
+                                            change.position.x.coerceIn(0f, maxWidth),
+                                            change.position.y.coerceIn(0f, maxHeight),
+                                        )
+                                        rectFromAnchor(anchor, point)
+                                    }
                                 },
                             )
                         },
                 ) {
                     val scrim = Color.Black.copy(alpha = 0.5f)
-                    val rect = selectionRect
+                    val rect = selection
                     if (rect != null) {
                         drawRect(color = scrim, topLeft = Offset.Zero, size = Size(size.width, rect.top))
                         drawRect(
@@ -206,6 +261,10 @@ fun WebThumbnailCaptureScreen(
                             size = rect.size,
                             style = Stroke(width = 2.dp.toPx()),
                         )
+                        val handleRadiusPx = HANDLE_DRAW_RADIUS.toPx()
+                        listOf(rect.topLeft, rect.topRight, rect.bottomLeft, rect.bottomRight).forEach { corner ->
+                            drawCircle(color = Color.White, radius = handleRadiusPx, center = corner)
+                        }
                     } else {
                         drawRect(color = scrim)
                     }

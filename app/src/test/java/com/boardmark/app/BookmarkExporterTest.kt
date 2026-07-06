@@ -10,66 +10,54 @@ import org.junit.Test
 
 class BookmarkExporterTest {
 
+    private fun bookmark(
+        id: Long,
+        url: String = "https://example.com",
+        title: String? = "Example",
+        folderId: Long? = null,
+    ) = Bookmark(
+        id = id,
+        url = url,
+        originalUrl = url,
+        title = title,
+        ogImageUrl = null,
+        faviconUrl = null,
+        fetchStatus = FetchStatus.SUCCESS,
+        addedAt = Instant.ofEpochMilli(2_000),
+        folderId = folderId,
+    )
+
     @Test
-    fun `serializes bookmarks and folders as json`() {
+    fun `renders ungrouped and folder bookmarks as netscape html`() {
         val folder = Folder(id = 1, name = "Travel", createdAt = Instant.ofEpochMilli(1_000))
-        val bookmark = Bookmark(
-            id = 10,
-            url = "https://example.com",
-            originalUrl = "https://example.com",
-            title = "Example",
-            ogImageUrl = null,
-            faviconUrl = null,
-            fetchStatus = FetchStatus.SUCCESS,
-            addedAt = Instant.ofEpochMilli(2_000),
-            folderId = 1,
-            description = "A description",
-            siteName = "Example Site",
-        )
+        val ungrouped = bookmark(id = 1, url = "https://example.com", title = "Example")
+        val grouped = bookmark(id = 2, url = "https://travel.example.com", title = "Trip", folderId = 1)
 
-        val json = BookmarkExporter.toJson(listOf(bookmark), listOf(folder))
+        val html = BookmarkExporter.toNetscapeHtml(listOf(ungrouped, grouped), listOf(folder))
 
-        assertTrue(json.contains(""""name":"Travel""""))
-        assertTrue(json.contains(""""title":"Example""""))
-        assertTrue(json.contains(""""description":"A description""""))
-        assertTrue(json.contains(""""siteName":"Example Site""""))
-        assertTrue(json.contains(""""folderId":1"""))
+        assertTrue(html.contains("<H3 ADD_DATE=\"1\">Travel</H3>"))
+        assertTrue(html.contains("HREF=\"https://example.com\""))
+        assertTrue(html.contains(">Example</A>"))
+        assertTrue(html.contains("HREF=\"https://travel.example.com\""))
+        assertTrue(html.contains(">Trip</A>"))
     }
 
     @Test
-    fun `escapes quotes and backslashes in strings`() {
-        val bookmark = Bookmark(
-            id = 1,
-            url = "https://example.com",
-            originalUrl = "https://example.com",
-            title = """He said "hi" \ bye""",
-            ogImageUrl = null,
-            faviconUrl = null,
-            fetchStatus = FetchStatus.SUCCESS,
-            addedAt = Instant.ofEpochMilli(1_000),
-        )
+    fun `escapes html special characters in title and url`() {
+        val bookmark = bookmark(id = 1, url = "https://example.com?a=1&b=2", title = """He said "hi" <bye>""")
 
-        val json = BookmarkExporter.toJson(listOf(bookmark), emptyList())
+        val html = BookmarkExporter.toNetscapeHtml(listOf(bookmark), emptyList())
 
-        assertTrue(json.contains("""He said \"hi\" \\ bye"""))
+        assertTrue(html.contains("https://example.com?a=1&amp;b=2"))
+        assertTrue(html.contains("He said &quot;hi&quot; &lt;bye&gt;"))
     }
 
     @Test
-    fun `renders null fields as json null`() {
-        val bookmark = Bookmark(
-            id = 1,
-            url = "https://example.com",
-            originalUrl = "https://example.com",
-            title = null,
-            ogImageUrl = null,
-            faviconUrl = null,
-            fetchStatus = FetchStatus.PENDING,
-            addedAt = Instant.ofEpochMilli(1_000),
-        )
+    fun `falls back to url when title is null`() {
+        val bookmark = bookmark(id = 1, url = "https://example.com", title = null)
 
-        val json = BookmarkExporter.toJson(listOf(bookmark), emptyList())
+        val html = BookmarkExporter.toNetscapeHtml(listOf(bookmark), emptyList())
 
-        assertTrue(json.contains(""""title":null"""))
-        assertTrue(json.contains(""""folderId":null"""))
+        assertTrue(html.contains(">https://example.com</A>"))
     }
 }
