@@ -2,6 +2,7 @@ package com.boardmark.app.ui.settings
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,7 +16,9 @@ import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,6 +50,8 @@ import com.boardmark.app.util.BrowserResolver
 import com.boardmark.app.util.displayLabel
 import kotlinx.coroutines.launch
 
+private const val PRIVACY_POLICY_URL = "https://journeygirl40.github.io/boardmark/"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel()) {
@@ -55,12 +60,18 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
     var languagePickerVisible by remember { mutableStateOf(false) }
     var browserPickerVisible by remember { mutableStateOf(false) }
     var labelManagementVisible by remember { mutableStateOf(false) }
+    var helpVisible by remember { mutableStateOf(false) }
     var defaultBrowserPackage by remember { mutableStateOf(viewModel.getDefaultBrowser()) }
     val isAdFree by viewModel.billingManager.isAdFree.collectAsState()
     val adFreeProductDetails by viewModel.billingManager.productDetails.collectAsState()
 
     if (labelManagementVisible) {
         LabelManagementScreen(onBack = { labelManagementVisible = false })
+        return
+    }
+
+    if (helpVisible) {
+        HelpScreen(onBack = { helpVisible = false })
         return
     }
 
@@ -125,6 +136,11 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 },
             )
             ListItem(
+                headlineContent = { Text(stringResource(R.string.help_action)) },
+                leadingContent = { Icon(Icons.Filled.HelpOutline, contentDescription = null) },
+                modifier = Modifier.clickable { helpVisible = true },
+            )
+            ListItem(
                 headlineContent = { Text(stringResource(R.string.label_management_action)) },
                 supportingContent = { Text(stringResource(R.string.label_management_summary)) },
                 leadingContent = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) },
@@ -170,6 +186,13 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                         context.startActivity(Intent.createChooser(intent, null))
                         (context as? Activity)?.let { InterstitialAdManager.maybeShow(it, InterstitialAdManager.Trigger.EXPORT) }
                     }
+                },
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.privacy_policy_action)) },
+                leadingContent = { Icon(Icons.Filled.Policy, contentDescription = null) },
+                modifier = Modifier.clickable {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)))
                 },
             )
         }

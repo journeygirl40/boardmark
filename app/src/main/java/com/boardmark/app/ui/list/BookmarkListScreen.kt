@@ -51,10 +51,10 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoSizeSelectLarge
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -111,7 +111,6 @@ import com.boardmark.app.ui.components.BookmarkCard
 import com.boardmark.app.ui.components.BrowserPickerDialog
 import com.boardmark.app.ui.components.DuplicateResolutionDialog
 import com.boardmark.app.ui.components.FolderTile
-import com.boardmark.app.ui.components.MoreActionsSheet
 import com.boardmark.app.ui.components.MoveToFolderDialog
 import com.boardmark.app.ui.components.NewFolderDialog
 import com.boardmark.app.ui.components.RenameBookmarkDialog
@@ -160,7 +159,6 @@ fun BookmarkListScreen(
     var renameBookmarkTarget by remember { mutableStateOf<Bookmark?>(null) }
     var webCaptureBookmark by remember { mutableStateOf<Bookmark?>(null) }
     var sizeMenuExpanded by remember { mutableStateOf(false) }
-    var moreSheetVisible by remember { mutableStateOf(false) }
     var sortFilterSheetVisible by remember { mutableStateOf(false) }
     var labelDialogTargetIds by remember { mutableStateOf<Set<Long>?>(null) }
     var pendingAutoThumbnailIds by remember { mutableStateOf<Set<Long>?>(null) }
@@ -169,12 +167,12 @@ fun BookmarkListScreen(
     var folderBrowserPickerTarget by remember { mutableStateOf<FolderTarget?>(null) }
     var searchFieldFocused by remember { mutableStateOf(false) }
 
-    val adCoroutineScope = rememberCoroutineScope()
+    val screenScope = rememberCoroutineScope()
     // サムネイル更新開始の2秒後に、件数に応じた確率でインタースティシャル広告を出す。
     // itemCountが10件以上(複数選択の一括更新)の場合はほぼ確定表示になる。
     fun maybeShowThumbnailUpdateAd(itemCount: Int) {
         val activity = context as? Activity ?: return
-        adCoroutineScope.launch {
+        screenScope.launch {
             delay(2000)
             InterstitialAdManager.maybeShow(
                 activity,
@@ -400,8 +398,8 @@ fun BookmarkListScreen(
                             IconButton(onClick = { sortFilterSheetVisible = true }) {
                                 Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null)
                             }
-                            IconButton(onClick = { moreSheetVisible = true }) {
-                                Icon(Icons.Filled.MoreVert, contentDescription = null)
+                            IconButton(onClick = onOpenSettings) {
+                                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_action))
                             }
                         },
                         )
@@ -827,16 +825,6 @@ fun BookmarkListScreen(
                     webCaptureBookmark = null
                 },
                 onDismiss = { webCaptureBookmark = null },
-            )
-        }
-
-        if (moreSheetVisible) {
-            MoreActionsSheet(
-                onOpenSettings = {
-                    moreSheetVisible = false
-                    onOpenSettings()
-                },
-                onDismiss = { moreSheetVisible = false },
             )
         }
 
