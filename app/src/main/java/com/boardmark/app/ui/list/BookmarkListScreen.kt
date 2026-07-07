@@ -19,16 +19,19 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -475,9 +478,13 @@ fun BookmarkListScreen(
             },
             bottomBar = { BannerAd() },
         ) { padding ->
+            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            val gridState = rememberLazyGridState()
+            val columnCount = thumbnailColumnsForLevel(uiState.thumbnailSizeLevel)
+
             if (uiState.gridItems.isEmpty()) {
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(padding).clearFocusOnTap(),
+                    modifier = Modifier.fillMaxSize().clearFocusOnTap(),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -487,7 +494,6 @@ fun BookmarkListScreen(
                     )
                 }
             } else {
-                val gridState = rememberLazyGridState()
                 val currentItems by rememberUpdatedState(uiState.gridItems)
                 val selectionModeState by rememberUpdatedState(uiState.isSelectionMode)
                 val selectedIdsState by rememberUpdatedState(uiState.selectedIds)
@@ -498,13 +504,12 @@ fun BookmarkListScreen(
                     // そのまま列数1〜4に対応するため、動かして効果のない中間値が存在しない)。
                     // StaggeredGridではなく通常のGridを使うことで、カードの高さが
                     // 揃っていない場合でも必ずZ字(行優先)の並び順になる。
-                    columns = GridCells.Fixed(thumbnailColumnsForLevel(uiState.thumbnailSizeLevel)),
+                    columns = GridCells.Fixed(columnCount),
                     contentPadding = PaddingValues(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(padding)
                         .clearFocusOnTap()
                         .pointerInput(Unit) {
                             coroutineScope {
@@ -675,36 +680,50 @@ fun BookmarkListScreen(
                         }
                     }
                 }
-            }
-        }
 
-        // 処理中もグリッド操作やダイアログ表示を妨げないよう、モーダルにはせず
-        // 画面下部(バナー広告の直上)に細い進捗バーとして表示する。
-        thumbnailFetchProgress?.let { progress ->
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(start = 16.dp, end = 16.dp, bottom = 64.dp)
-                    .fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-                tonalElevation = 4.dp,
-                shadowElevation = 4.dp,
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = stringResource(
-                            R.string.auto_thumbnail_progress,
-                            progress.completed,
-                            progress.total,
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LinearProgressIndicator(
-                        progress = { progress.completed / progress.total.toFloat() },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                // スワイプ中に一覧全体のどのあたりを見ているか分かるよう、右端に
+                // 現在位置を示す細いバーを表示する。スクロール中だけ出してすぐ消すことで、
+                // 常時表示による視覚的なノイズを避ける。
+                GridScrollbar(
+                    gridState = gridState,
+                    columns = columnCount,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .padding(vertical = 8.dp, horizontal = 3.dp),
+                )
+            }
+
+            // 処理中もグリッド操作やダイアログ表示を妨げないよう、モーダルにはせず
+            // 画面上部(検索バーの直下)に細い進捗バーとして表示する。下部は広告バナーが
+            // あり親指の操作域にも近いため避け、常に視界に入る上部に置く。
+            thumbnailFetchProgress?.let { progress ->
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                        .fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    tonalElevation = 4.dp,
+                    shadowElevation = 4.dp,
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = stringResource(
+                                R.string.auto_thumbnail_progress,
+                                progress.completed,
+                                progress.total,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        LinearProgressIndicator(
+                            progress = { progress.completed / progress.total.toFloat() },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
+            }
             }
         }
 
@@ -964,6 +983,63 @@ private fun LabelFilterRow(
                     .background(containerColor)
                     .clickable { onToggle(label.id) }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
+// 一覧全体に対する現在のスクロール位置を示す、右端の細いバー。行数ベースで
+// 位置とバーの長さを計算するため、GridCells.Fixed(N)の列数(columns)が必要。
+@Composable
+private fun GridScrollbar(
+    gridState: LazyGridState,
+    columns: Int,
+    modifier: Modifier = Modifier,
+) {
+    val layoutInfo = gridState.layoutInfo
+    val totalItemCount = layoutInfo.totalItemsCount
+    val visibleItemsInfo = layoutInfo.visibleItemsInfo
+    if (columns <= 0 || totalItemCount == 0 || visibleItemsInfo.isEmpty()) return
+
+    val totalRows = (totalItemCount + columns - 1) / columns
+    val firstVisibleRow = visibleItemsInfo.first().index / columns
+    val lastVisibleRow = visibleItemsInfo.last().index / columns
+    val visibleRowCount = (lastVisibleRow - firstVisibleRow + 1).coerceIn(1, totalRows)
+    // 一覧が1画面に収まっている(スクロール不要)場合はバーを出す意味がない。
+    if (visibleRowCount >= totalRows) return
+
+    val scrollableRows = (totalRows - visibleRowCount).coerceAtLeast(1)
+    val progress = (firstVisibleRow.toFloat() / scrollableRows).coerceIn(0f, 1f)
+    val barFraction = (visibleRowCount.toFloat() / totalRows).coerceIn(0.06f, 1f)
+
+    // フリング中も含めて操作している間だけ表示し、止まったら少し待ってフェードアウトする
+    // (常時表示すると一覧の見た目のノイズになるため)。
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(gridState.isScrollInProgress) {
+        if (gridState.isScrollInProgress) {
+            isVisible = true
+        } else {
+            delay(600)
+            isVisible = false
+        }
+    }
+
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = modifier,
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxHeight().width(4.dp)) {
+            val trackHeight = maxHeight
+            val barHeight = trackHeight * barFraction
+            Box(
+                modifier = Modifier
+                    .offset(y = (trackHeight - barHeight) * progress)
+                    .width(4.dp)
+                    .height(barHeight)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)),
             )
         }
     }
