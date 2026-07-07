@@ -12,6 +12,7 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.request.crossfade
 import com.boardmark.app.ads.AdFreeAccess
 import com.boardmark.app.ads.InterstitialAdManager
 import com.google.android.gms.ads.MobileAds
@@ -46,6 +47,9 @@ class BoardmarkApplication :
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
             .components { add(OkHttpNetworkFetcherFactory(callFactory = { okHttpClient })) }
+            // 読み込み完了時にフェードインさせ、一覧スクロール中に画像が
+            // 唐突にポップインして見えるのを抑える。
+            .crossfade(true)
             .build()
 
     override fun onCreate() {

@@ -612,7 +612,19 @@ fun BookmarkListScreen(
                             }
                         },
                 ) {
-                    items(uiState.gridItems, key = { it.key }) { item ->
+                    items(
+                        uiState.gridItems,
+                        key = { it.key },
+                        // フォルダとブックマークで構成が全く異なるため、種別ごとにcontentTypeを
+                        // 分けることで、スクロールでアイテムが入れ替わる際のコンポジション再利用の
+                        // 効率を上げる(異なる種別同士では再利用されず、同種別間でのみ再利用される)。
+                        contentType = { item ->
+                            when (item) {
+                                is BookmarkGridItem.FolderItem -> "folder"
+                                is BookmarkGridItem.BookmarkItem -> "bookmark"
+                            }
+                        },
+                    ) { item ->
                         when (item) {
                             is BookmarkGridItem.FolderItem -> FolderTile(
                                 data = item.data,
