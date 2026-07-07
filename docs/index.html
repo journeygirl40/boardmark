@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Boardmark - プライバシーポリシー / Privacy Policy</title>
+<title>Boardmark - プライバシーポリシー・利用規約 / Privacy Policy & Terms of Use</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -11,6 +11,7 @@
     --fg: #1b1b1f;
     --muted: #5b5f68;
     --border: #e2e2e6;
+    --card: #f8f9fb;
     --accent: #3c5fe0;
   }
   @media (prefers-color-scheme: dark) {
@@ -19,6 +20,7 @@
       --fg: #eceef2;
       --muted: #a2a6b0;
       --border: #2c2d31;
+      --card: #1a1b1e;
       --accent: #8ea4ff;
     }
   }
@@ -32,27 +34,68 @@
     line-height: 1.7;
   }
   .page {
-    max-width: 720px;
+    max-width: 760px;
     margin: 0 auto;
     padding: 48px 20px 96px;
   }
+  header.doc-header {
+    text-align: center;
+    padding-bottom: 32px;
+    margin-bottom: 32px;
+    border-bottom: 1px solid var(--border);
+  }
   h1 {
     font-size: 1.6rem;
-    margin-bottom: 4px;
+    margin: 0 0 8px;
   }
   .updated {
     color: var(--muted);
     font-size: 0.9rem;
-    margin-bottom: 40px;
+    margin: 0 0 4px;
+  }
+  .contact-line {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+  nav.toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 28px;
+  }
+  nav.toc strong {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  nav.toc ul {
+    margin: 0;
+    padding-left: 1.2em;
+  }
+  nav.toc li {
+    font-size: 0.92rem;
+    margin: 2px 0;
+  }
+  section.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 22px 18px;
+    margin: 18px 0;
   }
   h2 {
-    font-size: 1.15rem;
-    margin-top: 40px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--border);
+    font-size: 1.25rem;
+    margin-top: 24px;
+  }
+  h3 {
+    font-size: 1.02rem;
+    margin: 22px 0 6px;
   }
   p, li {
-    font-size: 0.98rem;
+    font-size: 0.96rem;
   }
   ul {
     padding-left: 1.3em;
@@ -65,13 +108,9 @@
     border: none;
     border-top: 2px solid var(--border);
   }
-  .placeholder {
-    background: color-mix(in srgb, var(--accent) 15%, transparent);
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
   footer {
     margin-top: 56px;
+    text-align: center;
     color: var(--muted);
     font-size: 0.85rem;
   }
@@ -80,137 +119,280 @@
 <body>
 <div class="page">
 
-  <h1>Boardmark プライバシーポリシー</h1>
-  <p class="updated">最終更新日: 2026年7月6日</p>
+  <header class="doc-header">
+    <h1>Boardmark プライバシーポリシー・利用規約</h1>
+    <p class="updated">最終更新日: 2026年7月7日</p>
+    <p class="contact-line">お問い合わせ: <a href="mailto:ogo.youki@gmail.com">ogo.youki@gmail.com</a></p>
+  </header>
 
-  <p>
-    本ポリシーは、ブックマーク管理アプリ「Boardmark」(以下「本アプリ」)における
-    利用者情報の取り扱いについて説明するものです。
-  </p>
+  <nav class="toc" aria-label="目次">
+    <strong>目次</strong>
+    <ul>
+      <li><a href="#privacy">プライバシーポリシー</a>
+        <ul>
+          <li><a href="#privacy-1">1. 本アプリが保存する情報</a></li>
+          <li><a href="#privacy-2">2. ネットワーク通信について</a></li>
+          <li><a href="#privacy-3">3. 広告(Google AdMob)</a></li>
+          <li><a href="#privacy-4">4. アプリ内課金(Google Play Billing)</a></li>
+          <li><a href="#privacy-5">5. エクスポート・インポート機能について</a></li>
+          <li><a href="#privacy-6">6. 既定のブラウザ選択について</a></li>
+          <li><a href="#privacy-7">7. 外部サイトへのアクセスについて</a></li>
+          <li><a href="#privacy-8">8. 開発者が直接収集する情報</a></li>
+          <li><a href="#privacy-9">9. お子様のプライバシーについて</a></li>
+        </ul>
+      </li>
+      <li><a href="#terms">利用規約</a>
+        <ul>
+          <li><a href="#terms-1">1. データの管理について</a></li>
+          <li><a href="#terms-2">2. 免責事項について</a></li>
+        </ul>
+      </li>
+    </ul>
+  </nav>
 
-  <h2>本アプリが保存する情報</h2>
-  <p>
-    本アプリで保存するブックマーク(URL、タイトル、サムネイル画像、フォルダ、ラベルなど)は、
-    すべて利用者の端末内にのみ保存されます。開発者が運営するサーバーへこれらの情報が
-    送信・保存されることはありません。アプリをアンインストールすると、これらのデータは
-    端末から削除されます。
-  </p>
+  <section class="card" id="privacy">
+    <h2>プライバシーポリシー</h2>
+    <p>
+      ブックマーク管理アプリ「Boardmark」(以下「本アプリ」)は、利用者の情報を適切に
+      取り扱うため、以下のとおりプライバシーポリシーを定めます。
+    </p>
 
-  <h2>通信について</h2>
-  <ul>
-    <li>
-      ブックマーク追加時のプレビュー(タイトル・画像)を取得するため、利用者が保存した
-      Webページ自体に直接アクセスします。この通信は開発者のサーバーを経由しません。
-    </li>
-    <li>
-      広告の表示、および後述の「広告非表示」購入機能のために、Googleの広告・課金サービスと
-      通信します。
-    </li>
-  </ul>
+    <h3 id="privacy-1">1. 本アプリが保存する情報</h3>
+    <p>
+      本アプリで保存するブックマーク(URL、タイトル、サムネイル画像、フォルダ、ラベルなど)は、
+      すべて利用者の端末内にのみ保存されます。開発者が運営するサーバーへこれらの情報が
+      送信・保存されることはありません。
+    </p>
+    <p>
+      これらのデータはクラウドに同期・バックアップされないため、アプリをアンインストール
+      したり端末のアプリデータを消去したりすると、保存していたブックマークは復元できません。
+      機種変更やデータの引き継ぎに備えたい場合は、設定画面の「ブックマークをエクスポート
+      (HTML)」機能を使って定期的に手元へ書き出しておくことをおすすめします。
+    </p>
 
-  <h2>広告(Google AdMob)</h2>
-  <p>
-    本アプリはGoogle AdMobを利用してバナー広告・全画面広告を表示します。AdMobは広告の配信・
-    測定・パーソナライズのため、広告IDなどの識別子を収集する場合があります。詳細は
-    <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Googleのプライバシーポリシー</a>
-    をご確認ください。パーソナライズ広告の制限は、端末の設定(広告IDのリセット・パーソナライズ広告の
-    無効化)から行えます。
-  </p>
+    <h3 id="privacy-2">2. ネットワーク通信について</h3>
+    <ul>
+      <li>
+        ブックマーク追加時のプレビュー(タイトル・画像)を取得するため、利用者が保存した
+        Webページ自体に直接アクセスします。この通信は開発者のサーバーを経由しません。
+      </li>
+      <li>
+        広告の表示、および「広告非表示」購入機能のために、Googleの広告・課金サービスと
+        通信します。
+      </li>
+    </ul>
 
-  <h2>アプリ内課金(Google Play Billing)</h2>
-  <p>
-    広告非表示の買い切りアップグレードは、Google Playの課金システムを通じて処理されます。
-    クレジットカード番号などの決済情報を開発者が受け取ったり保存したりすることはありません。
-  </p>
+    <h3 id="privacy-3">3. 広告(Google AdMob)</h3>
+    <p>
+      本アプリはGoogle AdMobを利用してバナー広告・全画面広告を表示します。AdMobは広告の配信・
+      測定・パーソナライズのため、広告IDなどの識別子を収集する場合があります。詳細は
+      <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Googleのプライバシーポリシー</a>
+      をご確認ください。パーソナライズ広告の制限は、端末の設定(広告IDのリセット・パーソナライズ広告の
+      無効化)から行えます。なお、本アプリはGoogle Analyticsなどのアクセス解析ツールは組み込んでいません。
+    </p>
 
-  <h2>開発者が直接収集する情報</h2>
-  <p>
-    本アプリはアカウント登録・ログインを必要とせず、氏名・メールアドレスなどの個人情報を
-    開発者が直接収集することはありません。アクセス解析ツール等も組み込んでいません。
-  </p>
+    <h3 id="privacy-4">4. アプリ内課金(Google Play Billing)</h3>
+    <p>
+      広告非表示の買い切りアップグレードは、Google Playの課金システムを通じて処理されます。
+      クレジットカード番号などの決済情報を開発者が受け取ったり保存したりすることはありません。
+    </p>
 
-  <h2>お子様のプライバシーについて</h2>
-  <p>本アプリは13歳未満のお子様を対象としたものではありません。</p>
+    <h3 id="privacy-5">5. エクスポート・インポート機能について</h3>
+    <p>
+      「ブックマークをエクスポート(HTML)」機能を使うと、端末標準の保存先選択画面が開き、
+      利用者が選んだ場所(端末のストレージや、利用者自身が選んだクラウドストレージアプリなど)
+      に直接ファイルが書き出されます。書き出し先は利用者の選択によるものであり、開発者の
+      サーバーを経由することはありません。「ブックマークをインポート(HTML)」機能も同様に、
+      利用者が選んだファイルを端末内で直接読み込みます。
+    </p>
 
-  <h2>本ポリシーの変更</h2>
-  <p>
-    本ポリシーの内容は、法令の変更や本アプリの機能追加に伴い、予告なく変更する場合があります。
-    変更後は本ページの内容が最新のものとなります。
-  </p>
+    <h3 id="privacy-6">6. 既定のブラウザ選択について</h3>
+    <p>
+      フォルダやブックマークを開く際に使うブラウザを選ぶため、端末にインストールされている
+      ブラウザアプリの一覧を取得します。この情報は端末内の処理にのみ使用され、外部へ送信
+      されることはありません。
+    </p>
 
-  <h2>お問い合わせ</h2>
-  <p>
-    本ポリシーに関するお問い合わせは、下記までご連絡ください。<br>
-    <span class="placeholder">ogo.youki@gmail.com</span>
-  </p>
+    <h3 id="privacy-7">7. 外部サイトへのアクセスについて</h3>
+    <p>
+      ブックマークを開くと、選択したブラウザを通じて保存先のWebサイトに直接アクセスします。
+      これら第三者のWebサイトのコンテンツ内容やプライバシーの取り扱いについて、開発者は
+      関与しておらず、責任を負いかねます。
+    </p>
+
+    <h3 id="privacy-8">8. 開発者が直接収集する情報</h3>
+    <p>
+      本アプリはアカウント登録・ログインを必要とせず、氏名・メールアドレスなどの個人情報を
+      開発者が直接収集することはありません。
+    </p>
+
+    <h3 id="privacy-9">9. お子様のプライバシーについて</h3>
+    <p>本アプリは13歳未満のお子様を対象としたものではありません。</p>
+
+    <p style="color:var(--muted); font-size:0.85rem; margin-top:24px;">
+      本ポリシーの内容は、法令の変更や本アプリの機能追加に伴い、予告なく変更する場合があります。
+      変更後は本ページの内容が最新のものとなります。
+    </p>
+  </section>
+
+  <section class="card" id="terms">
+    <h2>利用規約</h2>
+
+    <h3 id="terms-1">1. データの管理について</h3>
+    <p>
+      本アプリで保存したブックマーク等のデータは、利用者の端末のみで管理されます。データの
+      管理は利用者ご自身の責任において行ってください。クラウドへの自動バックアップは
+      行われないため、機種変更やアプリの再インストールに備えたい場合は、エクスポート機能を
+      使って利用者自身でバックアップを取得してください。
+    </p>
+
+    <h3 id="terms-2">2. 免責事項について</h3>
+    <p>
+      本アプリは品質向上に努めていますが、不具合が一切発生しないことを保証するものでは
+      ありません。本アプリの利用、またはブックマークを通じてアクセスした第三者のWebサイトの
+      内容により発生したいかなる損害についても、開発者は一切の責任を負いません。
+    </p>
+  </section>
 
   <hr class="lang-divider">
 
-  <h1>Boardmark Privacy Policy</h1>
-  <p class="updated">Last updated: July 6, 2026</p>
+  <header class="doc-header">
+    <h1>Boardmark Privacy Policy &amp; Terms of Use</h1>
+    <p class="updated">Last updated: July 7, 2026</p>
+    <p class="contact-line">Contact: <a href="mailto:ogo.youki@gmail.com">ogo.youki@gmail.com</a></p>
+  </header>
 
-  <p>
-    This policy explains how the bookmark manager app "Boardmark" (the "App") handles
-    user information.
-  </p>
+  <nav class="toc" aria-label="Table of contents">
+    <strong>Table of Contents</strong>
+    <ul>
+      <li><a href="#privacy-en">Privacy Policy</a>
+        <ul>
+          <li><a href="#privacy-en-1">1. Information Stored by the App</a></li>
+          <li><a href="#privacy-en-2">2. Network Communication</a></li>
+          <li><a href="#privacy-en-3">3. Advertising (Google AdMob)</a></li>
+          <li><a href="#privacy-en-4">4. In-App Purchases (Google Play Billing)</a></li>
+          <li><a href="#privacy-en-5">5. Export and Import</a></li>
+          <li><a href="#privacy-en-6">6. Default Browser Selection</a></li>
+          <li><a href="#privacy-en-7">7. Access to External Sites</a></li>
+          <li><a href="#privacy-en-8">8. Information Collected Directly by the Developer</a></li>
+          <li><a href="#privacy-en-9">9. Children's Privacy</a></li>
+        </ul>
+      </li>
+      <li><a href="#terms-en">Terms of Use</a>
+        <ul>
+          <li><a href="#terms-en-1">1. Data Management</a></li>
+          <li><a href="#terms-en-2">2. Disclaimer</a></li>
+        </ul>
+      </li>
+    </ul>
+  </nav>
 
-  <h2>Information Stored by the App</h2>
-  <p>
-    Bookmarks you save (URLs, titles, thumbnail images, folders, and labels) are stored
-    only on your device. This data is never sent to or stored on any server operated by
-    the developer. Uninstalling the App removes this data from your device.
-  </p>
+  <section class="card" id="privacy-en">
+    <h2>Privacy Policy</h2>
+    <p>
+      The bookmark manager app "Boardmark" (the "App") handles user information as
+      described in this policy.
+    </p>
 
-  <h2>Network Communication</h2>
-  <ul>
-    <li>
-      To generate a preview (title/image) when you add a bookmark, the App connects
-      directly to the web page you saved. This request does not pass through any
-      developer-operated server.
-    </li>
-    <li>
-      The App communicates with Google's advertising and billing services as described
-      below.
-    </li>
-  </ul>
+    <h3 id="privacy-en-1">1. Information Stored by the App</h3>
+    <p>
+      Bookmarks you save (URLs, titles, thumbnail images, folders, and labels) are stored
+      only on your device. This data is never sent to or stored on any server operated by
+      the developer.
+    </p>
+    <p>
+      This data is not synced or backed up to any cloud service, so uninstalling the App
+      or clearing its app data will permanently remove your saved bookmarks. If you want
+      to keep a backup, for example before switching devices, use the "Export bookmarks
+      (HTML)" feature in Settings regularly to save a copy of your data.
+    </p>
 
-  <h2>Advertising (Google AdMob)</h2>
-  <p>
-    The App uses Google AdMob to display banner and interstitial ads. AdMob may collect
-    identifiers such as the advertising ID for ad delivery, measurement, and
-    personalization. See
-    <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>
-    for details. You can limit ad personalization or reset your advertising ID in your
-    device settings.
-  </p>
+    <h3 id="privacy-en-2">2. Network Communication</h3>
+    <ul>
+      <li>
+        To generate a preview (title/image) when you add a bookmark, the App connects
+        directly to the web page you saved. This request does not pass through any
+        developer-operated server.
+      </li>
+      <li>
+        The App communicates with Google's advertising and billing services as described
+        below.
+      </li>
+    </ul>
 
-  <h2>In-App Purchases (Google Play Billing)</h2>
-  <p>
-    The one-time "remove ads" upgrade is processed through Google Play's billing system.
-    The developer never receives or stores payment card details.
-  </p>
+    <h3 id="privacy-en-3">3. Advertising (Google AdMob)</h3>
+    <p>
+      The App uses Google AdMob to display banner and interstitial ads. AdMob may collect
+      identifiers such as the advertising ID for ad delivery, measurement, and
+      personalization. See
+      <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>
+      for details. You can limit ad personalization or reset your advertising ID in your
+      device settings. The App does not include any analytics SDK such as Google
+      Analytics.
+    </p>
 
-  <h2>Information Collected Directly by the Developer</h2>
-  <p>
-    The App does not require account creation or login, and the developer does not
-    directly collect personal information such as your name or email address. The App
-    does not include any analytics SDK.
-  </p>
+    <h3 id="privacy-en-4">4. In-App Purchases (Google Play Billing)</h3>
+    <p>
+      The one-time "remove ads" upgrade is processed through Google Play's billing system.
+      The developer never receives or stores payment card details.
+    </p>
 
-  <h2>Children's Privacy</h2>
-  <p>The App is not directed at children under the age of 13.</p>
+    <h3 id="privacy-en-5">5. Export and Import</h3>
+    <p>
+      The "Export bookmarks (HTML)" feature opens the device's standard save-location
+      picker, and the file is written directly to wherever you choose (device storage, or
+      a cloud storage app you select). The destination is entirely your choice and does
+      not pass through any developer-operated server. "Import bookmarks (HTML)" similarly
+      reads a file you choose directly on your device.
+    </p>
 
-  <h2>Changes to This Policy</h2>
-  <p>
-    This policy may be updated without notice to reflect changes in applicable law or
-    App functionality. The version on this page is always the current one.
-  </p>
+    <h3 id="privacy-en-6">6. Default Browser Selection</h3>
+    <p>
+      To let you choose which browser opens your bookmarks and folders, the App reads the
+      list of browser apps installed on your device. This information is only used
+      on-device and is never transmitted anywhere.
+    </p>
 
-  <h2>Contact</h2>
-  <p>
-    If you have questions about this policy, please contact:<br>
-    <span class="placeholder">ogo.youki@gmail.com</span>
-  </p>
+    <h3 id="privacy-en-7">7. Access to External Sites</h3>
+    <p>
+      Opening a bookmark takes you directly to the saved website through your chosen
+      browser. The developer has no control over, and is not responsible for, the content
+      or privacy practices of these third-party websites.
+    </p>
+
+    <h3 id="privacy-en-8">8. Information Collected Directly by the Developer</h3>
+    <p>
+      The App does not require account creation or login, and the developer does not
+      directly collect personal information such as your name or email address.
+    </p>
+
+    <h3 id="privacy-en-9">9. Children's Privacy</h3>
+    <p>The App is not directed at children under the age of 13.</p>
+
+    <p style="color:var(--muted); font-size:0.85rem; margin-top:24px;">
+      This policy may be updated without notice to reflect changes in applicable law or
+      App functionality. The version on this page is always the current one.
+    </p>
+  </section>
+
+  <section class="card" id="terms-en">
+    <h2>Terms of Use</h2>
+
+    <h3 id="terms-en-1">1. Data Management</h3>
+    <p>
+      Data you save in the App, such as bookmarks, is managed only on your device, and you
+      are responsible for managing it. Because there is no automatic cloud backup, please
+      use the export feature to keep your own backup if you plan to switch devices or
+      reinstall the App.
+    </p>
+
+    <h3 id="terms-en-2">2. Disclaimer</h3>
+    <p>
+      While the developer strives to maintain quality, the App is not guaranteed to be
+      free of defects. The developer is not liable for any damages arising from use of the
+      App or from the content of third-party websites accessed through your bookmarks.
+    </p>
+  </section>
 
   <footer>Boardmark</footer>
 </div>
