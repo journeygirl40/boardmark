@@ -52,11 +52,13 @@
     <string name="browser_picker_open">Open</string>
     <string name="browser_picker_none_found">No browser apps were found</string>
     <string name="export_bookmarks_html_action">Export bookmarks (HTML)</string>
-    <string name="export_bookmarks_html_summary">Creates a file compatible with Chrome and other browsers</string>
+    <string name="export_bookmarks_html_summary">Choose where to save a file compatible with Chrome and other browsers</string>
     <string name="import_bookmarks_html_action">Import bookmarks (HTML)</string>
     <string name="import_bookmarks_html_summary">Import a bookmarks file exported from Chrome or another browser</string>
     <string name="toast_import_bookmarks_result">Imported %1$d bookmarks</string>
     <string name="toast_import_bookmarks_failed">Could not read that file</string>
+    <string name="toast_export_bookmarks_success">Bookmarks exported</string>
+    <string name="toast_export_bookmarks_failed">Could not save that file</string>
     <string name="sort_section_title">Sort</string>
     <string name="sort_field_date">Date added</string>
     <string name="sort_field_title">Title</string>

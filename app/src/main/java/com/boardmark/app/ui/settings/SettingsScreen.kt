@@ -45,7 +45,6 @@ import com.boardmark.app.ads.InterstitialAdManager
 import com.boardmark.app.ui.components.BrowserPickerDialog
 import com.boardmark.app.ui.components.LanguagePickerDialog
 import com.boardmark.app.util.AppLanguage
-import com.boardmark.app.util.BookmarkExporter
 import com.boardmark.app.util.BrowserResolver
 import com.boardmark.app.util.displayLabel
 import kotlinx.coroutines.launch
@@ -92,6 +91,25 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 ).show()
                 (context as? Activity)?.let { InterstitialAdManager.maybeShow(it, InterstitialAdManager.Trigger.IMPORT) }
             }
+        }
+    }
+
+    // エクスポート内容はユーザーが保存先ダイアログで選び終わるまで(非同期)保持しておく必要がある。
+    var pendingExportHtml by remember { mutableStateOf<String?>(null) }
+    val createHtmlLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/html")) { uri ->
+        val html = pendingExportHtml
+        pendingExportHtml = null
+        if (uri == null || html == null) return@rememberLauncherForActivityResult
+        val success = runCatching {
+            context.contentResolver.openOutputStream(uri)?.use { it.write(html.toByteArray()) }
+        }.isSuccess
+        Toast.makeText(
+            context,
+            if (success) R.string.toast_export_bookmarks_success else R.string.toast_export_bookmarks_failed,
+            Toast.LENGTH_SHORT,
+        ).show()
+        if (success) {
+            (context as? Activity)?.let { InterstitialAdManager.maybeShow(it, InterstitialAdManager.Trigger.EXPORT) }
         }
     }
 
@@ -176,15 +194,8 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 leadingContent = { Icon(Icons.Filled.Download, contentDescription = null) },
                 modifier = Modifier.clickable {
                     coroutineScope.launch {
-                        val html = viewModel.exportBookmarksHtml()
-                        val uri = BookmarkExporter.saveHtmlToCacheAndGetUri(context, html)
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/html"
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(Intent.createChooser(intent, null))
-                        (context as? Activity)?.let { InterstitialAdManager.maybeShow(it, InterstitialAdManager.Trigger.EXPORT) }
+                        pendingExportHtml = viewModel.exportBookmarksHtml()
+                        createHtmlLauncher.launch("bookmarks.html")
                     }
                 },
             )

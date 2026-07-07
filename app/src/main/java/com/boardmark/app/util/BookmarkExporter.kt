@@ -1,11 +1,7 @@
 package com.boardmark.app.util
 
-import android.content.Context
-import androidx.core.content.FileProvider
-import android.net.Uri
 import com.boardmark.app.domain.model.Bookmark
 import com.boardmark.app.domain.model.Folder
-import java.io.File
 
 object BookmarkExporter {
 
@@ -44,15 +40,4 @@ object BookmarkExporter {
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
-
-    /** HTML(Netscapeブックマークファイル)をキャッシュディレクトリへ書き出し、共有可能なcontent:// Uriを返す。 */
-    fun saveHtmlToCacheAndGetUri(context: Context, html: String): Uri =
-        saveToCacheAndGetUri(context, html, extension = "html")
-
-    private fun saveToCacheAndGetUri(context: Context, content: String, extension: String): Uri {
-        val dir = File(context.cacheDir, "exports").apply { mkdirs() }
-        val file = File(dir, "boardmark_export_${System.currentTimeMillis()}.$extension")
-        file.writeText(content)
-        return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-    }
 }

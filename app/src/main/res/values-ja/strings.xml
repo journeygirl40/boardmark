@@ -52,11 +52,13 @@
     <string name="browser_picker_open">開く</string>
     <string name="browser_picker_none_found">ブラウザアプリが見つかりませんでした</string>
     <string name="export_bookmarks_html_action">ブックマークをエクスポート(HTML)</string>
-    <string name="export_bookmarks_html_summary">Chromeなど他のブラウザでも読み込めるファイルを作成します</string>
+    <string name="export_bookmarks_html_summary">保存先を選んで、Chromeなど他のブラウザでも読み込めるファイルを作成します</string>
     <string name="import_bookmarks_html_action">ブックマークをインポート(HTML)</string>
     <string name="import_bookmarks_html_summary">Chromeなど他のブラウザからエクスポートしたファイルを取り込みます</string>
     <string name="toast_import_bookmarks_result">%1$d件のブックマークをインポートしました</string>
     <string name="toast_import_bookmarks_failed">ファイルを読み込めませんでした</string>
+    <string name="toast_export_bookmarks_success">ブックマークをエクスポートしました</string>
+    <string name="toast_export_bookmarks_failed">ファイルを保存できませんでした</string>
     <string name="sort_section_title">並べ替え</string>
     <string name="sort_field_date">登録日</string>
     <string name="sort_field_title">タイトル</string>
