@@ -10,12 +10,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -44,6 +46,7 @@ import com.boardmark.app.ui.components.RenameLabelDialog
 fun LabelManagementScreen(onBack: () -> Unit, viewModel: LabelManagementViewModel = hiltViewModel()) {
     val items by viewModel.uiState.collectAsState()
     var query by remember { mutableStateOf("") }
+    var createDialogVisible by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<LabelWithCount?>(null) }
     var deleteTarget by remember { mutableStateOf<LabelWithCount?>(null) }
 
@@ -57,6 +60,11 @@ fun LabelManagementScreen(onBack: () -> Unit, viewModel: LabelManagementViewMode
                     }
                 },
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { createDialogVisible = true }) {
+                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_label_action))
+            }
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -120,6 +128,18 @@ fun LabelManagementScreen(onBack: () -> Unit, viewModel: LabelManagementViewMode
                 }
             }
         }
+    }
+
+    if (createDialogVisible) {
+        RenameLabelDialog(
+            currentName = "",
+            title = stringResource(R.string.add_label_title),
+            onConfirm = { newName ->
+                viewModel.onCreate(newName)
+                createDialogVisible = false
+            },
+            onDismiss = { createDialogVisible = false },
+        )
     }
 
     renameTarget?.let { item ->

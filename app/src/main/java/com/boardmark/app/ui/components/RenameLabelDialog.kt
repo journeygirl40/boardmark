@@ -17,12 +17,13 @@ fun RenameLabelDialog(
     currentName: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
+    title: String = stringResource(R.string.rename_label_title),
 ) {
     var name by remember { mutableStateOf(currentName) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.rename_label_title)) },
+        title = { Text(title) },
         text = {
             TextField(
                 value = name,

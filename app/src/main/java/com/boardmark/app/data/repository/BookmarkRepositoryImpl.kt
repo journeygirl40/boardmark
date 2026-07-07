@@ -240,6 +240,14 @@ class BookmarkRepositoryImpl @Inject constructor(
     override suspend fun countBookmarksForLabel(labelId: Long): Int =
         labelDao.countBookmarksForLabel(labelId)
 
+    override suspend fun createLabel(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        if (labelDao.findByName(trimmed) == null) {
+            labelDao.insert(LabelEntity(name = trimmed))
+        }
+    }
+
     override suspend fun renameLabel(labelId: Long, newName: String) {
         val trimmed = newName.trim()
         if (trimmed.isEmpty()) return

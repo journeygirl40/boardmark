@@ -45,6 +45,10 @@ class LabelManagementViewModel @Inject constructor(
         query.value = newQuery
     }
 
+    fun onCreate(name: String) {
+        viewModelScope.launch { repository.createLabel(name) }
+    }
+
     fun onRename(labelId: Long, newName: String) {
         viewModelScope.launch { repository.renameLabel(labelId, newName) }
     }

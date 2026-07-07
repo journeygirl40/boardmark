@@ -91,6 +91,12 @@ interface BookmarkRepository {
     suspend fun countBookmarksForLabel(labelId: Long): Int
 
     /**
+     * ブックマークに紐付けずにラベルだけを新規作成する(ラベル管理画面からの登録用)。
+     * 同名のラベルが既にあれば何もしない。
+     */
+    suspend fun createLabel(name: String)
+
+    /**
      * ラベル名を変更する。変更先の名前を持つ別ラベルが既に存在する場合は、そのラベルへ
      * 統合する(付け替え後に元のラベルは削除する)。
      */

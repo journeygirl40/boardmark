@@ -89,10 +89,12 @@
     <string name="remove_ads_purchased">Purchased. Ads are hidden.</string>
     <string name="remove_ads_price_fallback">¥500 (one-time)</string>
     <string name="label_management_action">Manage labels</string>
-    <string name="label_management_summary">Rename or delete labels</string>
+    <string name="label_management_summary">Add, rename, or delete labels</string>
     <string name="label_management_title">Manage labels</string>
     <string name="label_management_search_hint">Search labels</string>
     <string name="label_management_empty">No labels match your search</string>
+    <string name="add_label_action">Add label</string>
+    <string name="add_label_title">Add label</string>
     <string name="rename_label_action">Rename label</string>
     <string name="rename_label_title">Rename label</string>
     <string name="delete_label_action">Delete label</string>

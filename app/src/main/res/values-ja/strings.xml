@@ -89,10 +89,12 @@
     <string name="remove_ads_purchased">購入済み(広告は表示されません)</string>
     <string name="remove_ads_price_fallback">¥500(買い切り)</string>
     <string name="label_management_action">ラベル管理</string>
-    <string name="label_management_summary">ラベルの名前変更・削除</string>
+    <string name="label_management_summary">ラベルの登録・名前変更・削除</string>
     <string name="label_management_title">ラベル管理</string>
     <string name="label_management_search_hint">ラベルを検索</string>
     <string name="label_management_empty">該当するラベルがありません</string>
+    <string name="add_label_action">ラベルを追加</string>
+    <string name="add_label_title">ラベルを追加</string>
     <string name="rename_label_action">ラベル名を変更</string>
     <string name="rename_label_title">ラベル名を変更</string>
     <string name="delete_label_action">ラベルを削除</string>
