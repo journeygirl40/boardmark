@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -63,6 +64,11 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
     var defaultBrowserPackage by remember { mutableStateOf(viewModel.getDefaultBrowser()) }
     val isAdFree by viewModel.billingManager.isAdFree.collectAsState()
     val adFreeProductDetails by viewModel.billingManager.productDetails.collectAsState()
+
+    // ヘルプ/ラベル管理はダイアログではなく全画面差し替えなので、システムの戻るボタンで
+    // 設定画面に戻れるよう明示的に処理する(何もしないとアプリごと閉じる挙動になる)。
+    BackHandler(enabled = labelManagementVisible) { labelManagementVisible = false }
+    BackHandler(enabled = helpVisible) { helpVisible = false }
 
     if (labelManagementVisible) {
         LabelManagementScreen(onBack = { labelManagementVisible = false })

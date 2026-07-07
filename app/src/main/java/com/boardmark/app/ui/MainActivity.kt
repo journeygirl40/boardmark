@@ -1,6 +1,7 @@
 package com.boardmark.app.ui
 
 import android.os.Bundle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -21,6 +22,9 @@ class MainActivity : AppCompatActivity() {
         setContent {
             BoardmarkTheme {
                 var showSettings by rememberSaveable { mutableStateOf(false) }
+                // Navigation Composeを使わず画面をbooleanで切り替えているため、システムの
+                // 戻るボタンは何もしなければActivity終了(=アプリが閉じる)まで素通りしてしまう。
+                BackHandler(enabled = showSettings) { showSettings = false }
                 if (showSettings) {
                     SettingsScreen(onBack = { showSettings = false })
                 } else {
