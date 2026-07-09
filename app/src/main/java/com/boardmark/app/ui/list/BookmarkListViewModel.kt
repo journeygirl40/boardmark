@@ -55,6 +55,11 @@ class BookmarkListViewModel @Inject constructor(
     private val thumbnailFetchProgressFlow = MutableStateFlow<ThumbnailFetchProgress?>(null)
     val thumbnailFetchProgress: StateFlow<ThumbnailFetchProgress?> = thumbnailFetchProgressFlow
 
+    // フォルダ・検索条件に関わらない全ブックマーク総数。件数マイルストーンのお祝い演出の
+    // 検知に使うため、gridItems(絞り込み後)とは別に公開する。
+    val totalBookmarkCount: StateFlow<Int> = repository.observeTotalBookmarkCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
     init {
         viewModelScope.launch {
             duplicateGroupsFlow.value = repository.getUnresolvedDuplicateGroups()
@@ -140,6 +145,7 @@ class BookmarkListViewModel @Inject constructor(
         }
 
         BookmarkListUiState(
+            isLoading = false,
             gridItems = gridItems,
             query = currentQuery,
             sortCriteria = sortFilter.criteria,
@@ -178,6 +184,18 @@ class BookmarkListViewModel @Inject constructor(
 
     fun onToggleLabelFilter(labelId: Long) {
         activeLabelFilter.update { if (labelId in it) it - labelId else it + labelId }
+    }
+
+    /**
+     * ラベル管理画面でラベル名をタップしたときの遷移用。検索語やフォルダ表示中だと
+     * 意図した絞り込み結果に見えないため、それらをリセットしてこのラベル単体の
+     * 絞り込みに置き換える。
+     */
+    fun onFilterByLabelId(labelId: Long) {
+        clearSelection()
+        query.value = ""
+        currentFolderId.value = null
+        activeLabelFilter.value = setOf(labelId)
     }
 
     fun onBookmarkOpened(bookmarkId: Long) {

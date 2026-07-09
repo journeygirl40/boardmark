@@ -3,6 +3,7 @@ package com.boardmark.app.ads
 import android.app.Activity
 import android.content.Context
 import androidx.core.content.edit
+import com.boardmark.app.BuildConfig
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
@@ -11,8 +12,12 @@ import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import kotlin.random.Random
 
-// TODO: テスト用ID。申請/リリース前に本番ID(ca-app-pub-3334691626809528/9008469354)へ戻すこと。
-private const val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
+// デバッグビルドはGoogle公式のテスト用ID、リリースビルドは本番IDを使う。
+private val INTERSTITIAL_AD_UNIT_ID = if (BuildConfig.DEBUG) {
+    "ca-app-pub-3940256099942544/1033173712"
+} else {
+    "ca-app-pub-3334691626809528/9008469354"
+}
 
 private const val PREFS_NAME = "boardmark_prefs"
 private const val KEY_LAST_SHOWN_AT = "interstitial_last_shown_at"

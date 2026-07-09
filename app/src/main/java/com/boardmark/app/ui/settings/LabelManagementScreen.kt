@@ -1,5 +1,6 @@
 package com.boardmark.app.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,7 +44,11 @@ import com.boardmark.app.ui.components.RenameLabelDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LabelManagementScreen(onBack: () -> Unit, viewModel: LabelManagementViewModel = hiltViewModel()) {
+fun LabelManagementScreen(
+    onBack: () -> Unit,
+    onSelectLabel: (Long) -> Unit,
+    viewModel: LabelManagementViewModel = hiltViewModel(),
+) {
     val items by viewModel.uiState.collectAsState()
     var query by remember { mutableStateOf("") }
     var createDialogVisible by remember { mutableStateOf(false) }
@@ -103,7 +108,12 @@ fun LabelManagementScreen(onBack: () -> Unit, viewModel: LabelManagementViewMode
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(items, key = { it.label.id }) { item ->
                         ListItem(
-                            headlineContent = { Text(item.label.name) },
+                            headlineContent = {
+                                Text(
+                                    item.label.name,
+                                    modifier = Modifier.clickable { onSelectLabel(item.label.id) },
+                                )
+                            },
                             supportingContent = {
                                 Text(stringResource(R.string.folder_item_count, item.bookmarkCount))
                             },

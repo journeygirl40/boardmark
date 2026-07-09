@@ -22,6 +22,7 @@ import com.boardmark.app.domain.model.Folder
 import com.boardmark.app.domain.model.FolderWithPreview
 import com.boardmark.app.domain.model.Label
 import com.boardmark.app.domain.repository.BookmarkRepository
+import com.boardmark.app.domain.repository.FullBackupSnapshot
 import com.boardmark.app.domain.repository.TopLevelListing
 import com.boardmark.app.util.BookmarkImporter
 import com.boardmark.app.worker.OgpFetchWorker
@@ -72,6 +73,8 @@ class BookmarkRepositoryImpl @Inject constructor(
 
     override fun observeFolders(): Flow<List<Folder>> =
         folderDao.observeAll().map { it.map(FolderEntity::toDomain) }
+
+    override fun observeTotalBookmarkCount(): Flow<Int> = bookmarkDao.observeTotalCount()
 
     override suspend fun addBookmark(url: String): Boolean {
         val existing = bookmarkDao.findByOriginalUrl(url)
@@ -183,6 +186,71 @@ class BookmarkRepositoryImpl @Inject constructor(
         val bookmarks = bookmarkDao.observeAllRaw().first().map { it.toDomain() }
         val folders = folderDao.observeAll().first().map { it.toDomain() }
         return bookmarks to folders
+    }
+
+    override suspend fun getFullBackupSnapshot(): FullBackupSnapshot {
+        val bookmarks = bookmarkDao.observeAllRaw().first().map { it.toDomain() }
+        val folders = folderDao.observeAll().first().map { it.toDomain() }
+        val labels = labelDao.observeAll().first().map { it.toDomain() }
+        return FullBackupSnapshot(folders = folders, labels = labels, bookmarks = bookmarks)
+    }
+
+    override suspend fun restoreFullBackup(snapshot: FullBackupSnapshot): Int {
+        // スナップショット内のfolder.idは復元先の実IDとは無関係なので、名前が一致する
+        // 既存フォルダを再利用しつつ、対応関係だけをマップに保持する。
+        val folderIdMap = mutableMapOf<Long, Long>()
+        for (folder in snapshot.folders) {
+            val realId = folderDao.findByName(folder.name)?.id
+                ?: folderDao.insert(
+                    FolderEntity(
+                        name = folder.name,
+                        createdAt = folder.createdAt,
+                        defaultBrowserPackage = folder.defaultBrowserPackage,
+                    )
+                )
+            folderIdMap[folder.id] = realId
+        }
+
+        var insertedCount = 0
+        for (bookmark in snapshot.bookmarks) {
+            if (bookmarkDao.findByOriginalUrl(bookmark.originalUrl) != null) continue
+
+            val newBookmarkId = bookmarkDao.insert(
+                BookmarkEntity(
+                    url = bookmark.url,
+                    originalUrl = bookmark.originalUrl,
+                    title = bookmark.title,
+                    ogImageUrl = bookmark.ogImageUrl,
+                    faviconUrl = bookmark.faviconUrl,
+                    fetchStatus = bookmark.fetchStatus,
+                    addedAt = bookmark.addedAt,
+                    folderId = bookmark.folderId?.let { folderIdMap[it] },
+                    description = bookmark.description,
+                    siteName = bookmark.siteName,
+                    manualOrder = bookmark.manualOrder,
+                    viewCount = bookmark.viewCount,
+                    duplicateIgnored = bookmark.duplicateIgnored,
+                )
+            )
+
+            if (bookmark.labels.isNotEmpty()) {
+                val labelIds = bookmark.labels.map { label ->
+                    labelDao.findByName(label.name)?.id
+                        ?: labelDao.insert(LabelEntity(name = label.name))
+                }
+                labelDao.insertCrossRefs(labelIds.map { BookmarkLabelCrossRef(bookmarkId = newBookmarkId, labelId = it) })
+            }
+            insertedCount++
+        }
+
+        // ブックマークが1件も無いラベル(登録だけされたラベル)もこの時点で復元しておく。
+        for (label in snapshot.labels) {
+            if (labelDao.findByName(label.name) == null) {
+                labelDao.insert(LabelEntity(name = label.name))
+            }
+        }
+
+        return insertedCount
     }
 
     override suspend fun importBookmarksFromHtml(html: String): Int {

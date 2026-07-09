@@ -13,3 +13,8 @@
 *.dex
 app/build/
 app/release/
+
+# Release signing (never commit real signing credentials)
+/keystore.properties
+*.jks
+*.keystore

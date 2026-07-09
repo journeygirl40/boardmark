@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Circle
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -89,9 +88,12 @@ fun BookmarkCard(
             // アスペクト比に関わらずカードの見た目の大きさを統一する。
             when (bookmark.fetchStatus) {
                 FetchStatus.PENDING -> {
-                    Box(modifier = Modifier.fillMaxWidth().aspectRatio(CardThumbnailAspectRatio).background(Color.LightGray)) {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center).padding(24.dp))
-                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(CardThumbnailAspectRatio)
+                            .shimmer(RoundedCornerShape(12.dp)),
+                    )
                 }
                 FetchStatus.SUCCESS, FetchStatus.FAILED -> {
                     val imageUrl = bookmark.ogImageUrl ?: bookmark.faviconUrl

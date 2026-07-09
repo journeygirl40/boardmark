@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Boardmark</string>
-    <string name="empty_state_message">Add web pages using the Share feature</string>
+    <string name="milestone_first_message">First bookmark saved! 🎉</string>
+    <string name="milestone_message">%1$d bookmarks saved! 🎉</string>
+    <string name="empty_state_title">Your board is empty</string>
+    <string name="empty_state_message">Share a web page to save your first bookmark</string>
+    <string name="empty_state_learn_more">How to add bookmarks</string>
+    <string name="empty_state_filtered_title">No matches</string>
+    <string name="empty_state_filtered_message">Try a different search or clear the label filter</string>
     <string name="search_placeholder">Search bookmarks</string>
     <string name="action_clear_search">Clear search</string>
     <string name="delete_confirm_title">Delete?</string>
@@ -14,6 +20,8 @@
     <string name="choose_thumbnail">Choose thumbnail</string>
     <string name="thumbnail_size_label">Thumbnail size</string>
     <string name="selection_count">%1$d selected</string>
+    <string name="selection_hint_long_press">Tip: press and hold an icon to see what it does</string>
+    <string name="action_clear_selection">Clear selection</string>
     <string name="action_select_all">Select all</string>
     <string name="action_move">Move</string>
     <string name="move_to_top_level">Top level (remove from folder)</string>
@@ -59,6 +67,14 @@
     <string name="toast_import_bookmarks_failed">Could not read that file</string>
     <string name="toast_export_bookmarks_success">Bookmarks exported</string>
     <string name="toast_export_bookmarks_failed">Could not save that file</string>
+    <string name="full_backup_export_action">Full backup</string>
+    <string name="full_backup_export_summary">Save everything (labels, thumbnails, and order) to restore later or on a new device</string>
+    <string name="full_backup_restore_action">Restore full backup</string>
+    <string name="full_backup_restore_summary">Restore bookmarks, folders, and labels from a full backup file</string>
+    <string name="toast_full_backup_success">Backup saved</string>
+    <string name="toast_full_backup_failed">Could not save the backup</string>
+    <string name="toast_full_backup_restore_result">Restored %1$d bookmarks</string>
+    <string name="toast_full_backup_restore_failed">Could not read that backup file</string>
     <string name="sort_section_title">Sort</string>
     <string name="sort_field_date">Date added</string>
     <string name="sort_field_title">Title</string>
@@ -109,12 +125,13 @@
     <string name="help_title">How to add a video</string>
     <string name="help_toc_title">Contents</string>
     <string name="help_share_section_title">Register via Share from a browser</string>
-    <string name="help_share_step1">Open the page you want to save in another app (like a browser), then tap its Share button.</string>
+    <string name="help_share_step1">Open the page you want to save in a browser, open its menu, then tap "Share...".</string>
     <string name="help_share_step2">Choose "Boardmark" from the list of apps to share with.</string>
-    <string name="help_share_step3">A message saying "Added to bookmarks" confirms it was saved.</string>
     <string name="help_paste_section_title">Enter a URL directly</string>
     <string name="help_paste_intro">Tap the button below and enter a URL to register it right away.</string>
     <string name="help_paste_open_dialog_action">Enter URL directly</string>
+    <string name="help_import_section_title">Import many at once</string>
+    <string name="help_import_intro">If you already have bookmarks saved in a browser like Chrome, export them as an HTML file, then go to Settings > \"Import bookmarks (HTML)\" and choose that file to register them all at once.</string>
     <string name="auto_thumbnail_confirm_title">Fetch images?</string>
     <string name="auto_thumbnail_confirm_message">This will automatically update %1$d item(s). For manual updates, update one item at a time.</string>
     <string name="auto_thumbnail_confirm_ok">Fetch</string>

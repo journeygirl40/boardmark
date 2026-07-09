@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Boardmark</string>
-    <string name="empty_state_message">共有機能からWebページを追加してください</string>
+    <string name="milestone_first_message">最初のブックマークを保存しました！ 🎉</string>
+    <string name="milestone_message">%1$d件のブックマークを保存しました！ 🎉</string>
+    <string name="empty_state_title">まだ何もありません</string>
+    <string name="empty_state_message">共有メニューから、最初のブックマークを追加してみましょう</string>
+    <string name="empty_state_learn_more">登録方法を見る</string>
+    <string name="empty_state_filtered_title">見つかりませんでした</string>
+    <string name="empty_state_filtered_message">検索条件を変えるか、ラベルの絞り込みを解除してみてください</string>
     <string name="search_placeholder">ブックマークを検索</string>
     <string name="action_clear_search">検索をクリア</string>
     <string name="delete_confirm_title">削除しますか？</string>
@@ -13,7 +19,9 @@
     <string name="toast_url_not_recognized">URLを認識できませんでした</string>
     <string name="choose_thumbnail">サムネイルを選択</string>
     <string name="thumbnail_size_label">サムネイルサイズ</string>
-    <string name="selection_count">%1$d件選択中</string>
+    <string name="selection_count">%1$d件</string>
+    <string name="selection_hint_long_press">ヒント: アイコンを長押しすると説明が表示されます</string>
+    <string name="action_clear_selection">選択を解除</string>
     <string name="action_select_all">すべて選択</string>
     <string name="action_move">移動</string>
     <string name="move_to_top_level">トップレベル（フォルダ解除）</string>
@@ -59,6 +67,14 @@
     <string name="toast_import_bookmarks_failed">ファイルを読み込めませんでした</string>
     <string name="toast_export_bookmarks_success">ブックマークをエクスポートしました</string>
     <string name="toast_export_bookmarks_failed">ファイルを保存できませんでした</string>
+    <string name="full_backup_export_action">完全バックアップ</string>
+    <string name="full_backup_export_summary">ラベル・サムネイル・並び順まで含めて保存し、あとで(または機種変更時に)復元できます</string>
+    <string name="full_backup_restore_action">完全バックアップを復元</string>
+    <string name="full_backup_restore_summary">完全バックアップファイルからブックマーク・フォルダ・ラベルを復元します</string>
+    <string name="toast_full_backup_success">バックアップを保存しました</string>
+    <string name="toast_full_backup_failed">バックアップを保存できませんでした</string>
+    <string name="toast_full_backup_restore_result">%1$d件のブックマークを復元しました</string>
+    <string name="toast_full_backup_restore_failed">バックアップファイルを読み込めませんでした</string>
     <string name="sort_section_title">並べ替え</string>
     <string name="sort_field_date">登録日</string>
     <string name="sort_field_title">タイトル</string>
@@ -109,12 +125,13 @@
     <string name="help_title">動画の登録方法</string>
     <string name="help_toc_title">目次</string>
     <string name="help_share_section_title">ブラウザから共有で登録</string>
-    <string name="help_share_step1">他のアプリ(ブラウザなど)で保存したいページを開き、共有ボタンをタップします。</string>
+    <string name="help_share_step1">ブラウザで保存したいページを開き、メニューを開いて「共有」をタップします。</string>
     <string name="help_share_step2">共有先の一覧から「Boardmark」を選びます。</string>
-    <string name="help_share_step3">「ブックマークに追加しました」と表示されれば保存完了です。</string>
     <string name="help_paste_section_title">URLを直接入力</string>
     <string name="help_paste_intro">下のボタンをタップしてURLを入力すると、その場で登録できます。</string>
     <string name="help_paste_open_dialog_action">URLを直接入力</string>
+    <string name="help_import_section_title">まとめてインポート</string>
+    <string name="help_import_intro">Chromeなどのブラウザに保存済みのブックマークがある場合は、そのブラウザでHTMLファイルとしてエクスポートし、設定画面の「ブックマークをインポート(HTML)」からそのファイルを選ぶと、まとめて登録できます。</string>
     <string name="auto_thumbnail_confirm_title">画像を取得しますか？</string>
     <string name="auto_thumbnail_confirm_message">%1$d件の自動更新を実施します。手動更新は1件ずつ更新してください。</string>
     <string name="auto_thumbnail_confirm_ok">取得</string>

@@ -47,10 +47,12 @@
             </intent-filter>
         </activity>
 
-        <!-- TODO: テスト用ID。申請/リリース前に本番ID(ca-app-pub-3334691626809528~9150115752)へ戻すこと。 -->
+        <!-- デバッグビルドはテスト用ID、リリースビルドは本番IDを使う(app/build.gradle.ktsの
+             manifestPlaceholdersでビルドタイプごとに切り替え、誤って本番広告をテスト端末で
+             クリックしてしまう事故やテストIDのままの申請を防ぐ)。 -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="${admobAppId}" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

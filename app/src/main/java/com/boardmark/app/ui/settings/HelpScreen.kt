@@ -86,6 +86,7 @@ fun HelpScreen(onBack: () -> Unit, viewModel: HelpViewModel = hiltViewModel()) {
     val scrollState = rememberScrollState()
     var shareSectionY by remember { mutableIntStateOf(0) }
     var pasteSectionY by remember { mutableIntStateOf(0) }
+    var importSectionY by remember { mutableIntStateOf(0) }
     var addBookmarkDialogVisible by remember { mutableStateOf(false) }
 
     fun scrollToSection(y: Int) {
@@ -115,6 +116,7 @@ fun HelpScreen(onBack: () -> Unit, viewModel: HelpViewModel = hiltViewModel()) {
             Text(stringResource(R.string.help_toc_title), style = MaterialTheme.typography.titleMedium)
             TocEntry(1, stringResource(R.string.help_share_section_title)) { scrollToSection(shareSectionY) }
             TocEntry(2, stringResource(R.string.help_paste_section_title)) { scrollToSection(pasteSectionY) }
+            TocEntry(3, stringResource(R.string.help_import_section_title)) { scrollToSection(importSectionY) }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 20.dp))
 
@@ -127,8 +129,6 @@ fun HelpScreen(onBack: () -> Unit, viewModel: HelpViewModel = hiltViewModel()) {
                 HelpStepImage(R.drawable.help_share_step1, stringResource(R.string.help_share_step1))
                 HelpStep(2, stringResource(R.string.help_share_step2))
                 HelpStepImage(R.drawable.help_share_step2, stringResource(R.string.help_share_step2))
-                HelpStep(3, stringResource(R.string.help_share_step3))
-                HelpStepImage(R.drawable.help_share_step3, stringResource(R.string.help_share_step3))
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp))
@@ -146,6 +146,20 @@ fun HelpScreen(onBack: () -> Unit, viewModel: HelpViewModel = hiltViewModel()) {
                 Button(onClick = { addBookmarkDialogVisible = true }) {
                     Text(stringResource(R.string.help_paste_open_dialog_action))
                 }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp))
+
+            Column(modifier = Modifier.onGloballyPositioned { importSectionY = it.positionInParent().y.roundToInt() }) {
+                Text(
+                    "3. " + stringResource(R.string.help_import_section_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = stringResource(R.string.help_import_intro),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         }
     }

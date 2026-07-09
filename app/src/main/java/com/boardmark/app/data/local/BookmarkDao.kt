@@ -22,6 +22,10 @@ interface BookmarkDao {
     @Query("SELECT * FROM bookmarks ORDER BY addedAt DESC")
     fun observeAllRaw(): Flow<List<BookmarkWithLabels>>
 
+    /** フォルダ・検索条件に関わらない全ブックマーク総数(件数マイルストーン検知用)。 */
+    @Query("SELECT COUNT(*) FROM bookmarks")
+    fun observeTotalCount(): Flow<Int>
+
     @Transaction
     @Query(
         "SELECT * FROM bookmarks WHERE folderId = :folderId AND " +

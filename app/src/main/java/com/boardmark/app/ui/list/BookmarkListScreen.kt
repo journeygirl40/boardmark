@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -66,14 +67,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -88,12 +94,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -111,8 +119,11 @@ import com.boardmark.app.ads.InterstitialAdManager
 import com.boardmark.app.domain.model.Bookmark
 import com.boardmark.app.domain.model.Label
 import com.boardmark.app.ui.components.BookmarkCard
+import com.boardmark.app.ui.components.BookmarkGridSkeleton
 import com.boardmark.app.ui.components.BrowserPickerDialog
 import com.boardmark.app.ui.components.DuplicateResolutionDialog
+import com.boardmark.app.ui.components.EmptyBookmarksState
+import com.boardmark.app.ui.components.MilestoneCelebration
 import com.boardmark.app.ui.components.FolderTile
 import com.boardmark.app.ui.components.MoveToFolderDialog
 import com.boardmark.app.ui.components.NewFolderDialog
@@ -124,7 +135,10 @@ import com.boardmark.app.ui.components.ThumbnailPickerDialog
 import com.boardmark.app.ui.components.WebThumbnailCaptureScreen
 import com.boardmark.app.util.BrowserResolver
 import com.boardmark.app.util.LocalImageStore
+import com.boardmark.app.util.MilestonePreference
+import com.boardmark.app.util.SelectionHintPreference
 import com.boardmark.app.util.domainOf
+import com.boardmark.app.util.rememberHaptics
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -143,14 +157,28 @@ private data class ReorderDrag(
 @Composable
 fun BookmarkListScreen(
     onOpenSettings: () -> Unit,
+    onOpenHelp: () -> Unit,
     viewModel: BookmarkListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val duplicateGroups by viewModel.duplicateGroups.collectAsState()
     val thumbnailFetchProgress by viewModel.thumbnailFetchProgress.collectAsState()
+    val totalBookmarkCount by viewModel.totalBookmarkCount.collectAsState()
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val haptics = rememberHaptics()
+
+    var celebratingMilestone by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(totalBookmarkCount) {
+        MilestonePreference.newlyReached(context, totalBookmarkCount)?.let { milestone ->
+            // 表示より先に既読化しておくことで、構成変更等でこのEffectが再実行されても
+            // 二重に祝わないようにする。
+            MilestonePreference.markCelebrated(context, milestone)
+            celebratingMilestone = milestone
+            haptics.confirm()
+        }
+    }
 
     var pendingDeleteSelection by remember { mutableStateOf(false) }
     var moveDialogVisible by remember { mutableStateOf(false) }
@@ -171,6 +199,17 @@ fun BookmarkListScreen(
     var searchFieldFocused by remember { mutableStateOf(false) }
 
     val screenScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // 選択モードのアイコンは長押しで説明が出るが、そのこと自体に気づきにくいため、
+    // 一番最初に選択モードへ入ったときだけ一度だけ知らせる(以降は二度と出さない)。
+    val selectionHintMessage = stringResource(R.string.selection_hint_long_press)
+    LaunchedEffect(uiState.isSelectionMode) {
+        if (uiState.isSelectionMode && !SelectionHintPreference.hasShownHint(context)) {
+            SelectionHintPreference.markHintShown(context)
+            snackbarHostState.showSnackbar(selectionHintMessage)
+        }
+    }
     // サムネイル更新開始の2秒後に、件数に応じた確率でインタースティシャル広告を出す。
     // itemCountが10件以上(複数選択の一括更新)の場合はほぼ確定表示になる。
     fun maybeShowThumbnailUpdateAd(itemCount: Int) {
@@ -237,62 +276,85 @@ fun BookmarkListScreen(
                     TopAppBar(
                         title = { Text(stringResource(R.string.selection_count, uiState.selectedIds.size)) },
                         navigationIcon = {
-                            IconButton(onClick = viewModel::clearSelection) {
-                                Icon(Icons.Filled.Close, contentDescription = null)
+                            TooltipIconButton(
+                                tooltip = stringResource(R.string.action_clear_selection),
+                                onClick = viewModel::clearSelection,
+                            ) {
+                                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear_selection))
                             }
                         },
                         actions = {
-                            IconButton(onClick = viewModel::onSelectAll) {
+                            TooltipIconButton(
+                                tooltip = stringResource(R.string.action_select_all),
+                                onClick = viewModel::onSelectAll,
+                            ) {
                                 Icon(
                                     Icons.Filled.SelectAll,
                                     contentDescription = stringResource(R.string.action_select_all),
                                 )
                             }
-                            IconButton(onClick = { moveDialogVisible = true }) {
+                            // 1件選択時にだけこのボタンを出し入れすると、後続のボタンの位置が
+                            // 選択件数によってずれてしまい押し間違いのもとになる。常に表示した
+                            // まま、名前変更が意味を持つ1件選択時だけ有効化することで位置を固定する。
+                            TooltipIconButton(
+                                tooltip = stringResource(R.string.rename_bookmark_action),
+                                onClick = {
+                                    val id = uiState.selectedIds.single()
+                                    renameBookmarkTarget = uiState.gridItems
+                                        .filterIsInstance<BookmarkGridItem.BookmarkItem>()
+                                        .firstOrNull { it.bookmark.id == id }?.bookmark
+                                },
+                                enabled = uiState.selectedIds.size == 1,
+                            ) {
+                                Icon(
+                                    Icons.Filled.Edit,
+                                    contentDescription = stringResource(R.string.rename_bookmark_action),
+                                )
+                            }
+                            TooltipIconButton(
+                                tooltip = stringResource(R.string.assign_labels_action),
+                                onClick = { labelDialogTargetIds = uiState.selectedIds },
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Label,
+                                    contentDescription = stringResource(R.string.assign_labels_action),
+                                )
+                            }
+                            TooltipIconButton(
+                                tooltip = stringResource(R.string.action_move),
+                                onClick = { moveDialogVisible = true },
+                            ) {
                                 Icon(
                                     Icons.AutoMirrored.Filled.DriveFileMove,
                                     contentDescription = stringResource(R.string.action_move),
                                 )
                             }
-                            IconButton(onClick = { pendingDeleteSelection = true }) {
-                                Icon(
-                                    Icons.Filled.Delete,
-                                    contentDescription = stringResource(R.string.delete_confirm_ok),
-                                )
-                            }
-                            IconButton(onClick = {
-                                val ids = uiState.selectedIds
-                                if (ids.size == 1) {
-                                    val id = ids.single()
-                                    thumbnailPickerBookmark = uiState.gridItems
-                                        .filterIsInstance<BookmarkGridItem.BookmarkItem>()
-                                        .firstOrNull { it.bookmark.id == id }?.bookmark
-                                } else {
-                                    pendingAutoThumbnailIds = ids
-                                }
-                            }) {
+                            TooltipIconButton(
+                                tooltip = stringResource(R.string.choose_thumbnail),
+                                onClick = {
+                                    val ids = uiState.selectedIds
+                                    if (ids.size == 1) {
+                                        val id = ids.single()
+                                        thumbnailPickerBookmark = uiState.gridItems
+                                            .filterIsInstance<BookmarkGridItem.BookmarkItem>()
+                                            .firstOrNull { it.bookmark.id == id }?.bookmark
+                                    } else {
+                                        pendingAutoThumbnailIds = ids
+                                    }
+                                },
+                            ) {
                                 Icon(
                                     Icons.Filled.Image,
                                     contentDescription = stringResource(R.string.choose_thumbnail),
                                 )
                             }
-                            if (uiState.selectedIds.size == 1) {
-                                IconButton(onClick = {
-                                    val id = uiState.selectedIds.single()
-                                    renameBookmarkTarget = uiState.gridItems
-                                        .filterIsInstance<BookmarkGridItem.BookmarkItem>()
-                                        .firstOrNull { it.bookmark.id == id }?.bookmark
-                                }) {
-                                    Icon(
-                                        Icons.Filled.Edit,
-                                        contentDescription = stringResource(R.string.rename_bookmark_action),
-                                    )
-                                }
-                            }
-                            IconButton(onClick = { labelDialogTargetIds = uiState.selectedIds }) {
+                            TooltipIconButton(
+                                tooltip = stringResource(R.string.delete_confirm_ok),
+                                onClick = { pendingDeleteSelection = true },
+                            ) {
                                 Icon(
-                                    Icons.AutoMirrored.Filled.Label,
-                                    contentDescription = stringResource(R.string.assign_labels_action),
+                                    Icons.Filled.Delete,
+                                    contentDescription = stringResource(R.string.delete_confirm_ok),
                                 )
                             }
                         },
@@ -327,45 +389,57 @@ fun BookmarkListScreen(
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                TextField(
-                                    value = uiState.query,
-                                    onValueChange = viewModel::onQueryChange,
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Filled.Search,
-                                            contentDescription = stringResource(R.string.search_placeholder),
-                                        )
-                                    },
-                                    trailingIcon = {
-                                        if (uiState.query.isNotEmpty()) {
-                                            IconButton(onClick = { viewModel.onQueryChange("") }) {
-                                                Icon(
-                                                    Icons.Filled.Close,
-                                                    contentDescription = stringResource(R.string.action_clear_search),
-                                                )
-                                            }
-                                        }
-                                    },
-                                    singleLine = true,
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                    keyboardActions = KeyboardActions(
-                                        onSearch = {
-                                            focusManager.clearFocus()
-                                            keyboardController?.hide()
-                                        },
-                                    ),
-                                    colors = TextFieldDefaults.colors(
-                                        focusedContainerColor = Color.Transparent,
-                                        unfocusedContainerColor = Color.Transparent,
-                                        disabledContainerColor = Color.Transparent,
-                                        focusedIndicatorColor = Color.Transparent,
-                                        unfocusedIndicatorColor = Color.Transparent,
-                                        disabledIndicatorColor = Color.Transparent,
-                                    ),
+                                // 通常のTextFieldはMaterial3仕様上の最小幅(280dp)を内部で
+                                // 強制するため、TopAppBar上の他のアクションアイコンに押されて
+                                // このSurfaceの実際の幅がそれを下回ると、末尾のクリアボタンが
+                                // 枠外にはみ出してSurfaceの角丸クリップで見えなくなってしまう
+                                // (常に横幅が足りない一部の端末で発生)。最小幅を持たない
+                                // BasicTextFieldを手組みすることでこれを避け、どんな幅でも
+                                // アイコンが必ず収まるようにする。
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .onFocusChanged { searchFieldFocused = it.isFocused },
-                                )
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Search,
+                                        contentDescription = stringResource(R.string.search_placeholder),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    BasicTextField(
+                                        value = uiState.query,
+                                        onValueChange = viewModel::onQueryChange,
+                                        singleLine = true,
+                                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                        ),
+                                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                        keyboardActions = KeyboardActions(
+                                            onSearch = {
+                                                focusManager.clearFocus()
+                                                keyboardController?.hide()
+                                            },
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .onFocusChanged { searchFieldFocused = it.isFocused },
+                                    )
+                                    if (uiState.query.isNotEmpty()) {
+                                        IconButton(
+                                            onClick = { viewModel.onQueryChange("") },
+                                            modifier = Modifier.size(32.dp),
+                                        ) {
+                                            Icon(
+                                                Icons.Filled.Close,
+                                                contentDescription = stringResource(R.string.action_clear_search),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         },
                         navigationIcon = {
@@ -412,8 +486,17 @@ fun BookmarkListScreen(
                             enter = fadeIn() + expandVertically(),
                             exit = fadeOut() + shrinkVertically(),
                         ) {
+                            // 検索語がラベル名にマッチする場合はそのラベルを先頭に寄せる。
+                            // ラベルで絞り込みたいときに横スクロールせず見つけられるようにするため。
+                            val orderedLabels = if (uiState.query.isBlank()) {
+                                uiState.allLabels
+                            } else {
+                                uiState.allLabels.sortedByDescending {
+                                    it.name.contains(uiState.query, ignoreCase = true)
+                                }
+                            }
                             LabelFilterRow(
-                                labels = uiState.allLabels,
+                                labels = orderedLabels,
                                 activeIds = uiState.activeLabelFilter,
                                 onToggle = viewModel::onToggleLabelFilter,
                             )
@@ -477,20 +560,22 @@ fun BookmarkListScreen(
                 }
             },
             bottomBar = { BannerAd() },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             val gridState = rememberLazyGridState()
             val columnCount = thumbnailColumnsForLevel(uiState.thumbnailSizeLevel)
 
-            if (uiState.gridItems.isEmpty()) {
+            if (uiState.isLoading) {
+                BookmarkGridSkeleton(columns = columnCount, modifier = Modifier.fillMaxSize())
+            } else if (uiState.gridItems.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize().clearFocusOnTap(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = stringResource(R.string.empty_state_message),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(32.dp),
+                    EmptyBookmarksState(
+                        isFiltered = uiState.query.isNotEmpty() || uiState.activeLabelFilter.isNotEmpty(),
+                        onLearnMoreClick = onOpenHelp,
                     )
                 }
             } else {
@@ -530,6 +615,7 @@ fun BookmarkListScreen(
                                                     }
                                                     is BookmarkGridItem.BookmarkItem -> {
                                                         if (selectionModeState) {
+                                                            haptics.selectionToggle()
                                                             viewModel.onToggleSelection(hitItem.bookmark.id)
                                                         } else {
                                                             viewModel.onBookmarkOpened(hitItem.bookmark.id)
@@ -565,6 +651,7 @@ fun BookmarkListScreen(
                                         onDragStart = { offset ->
                                             when (val hitItem = hitTestItem(gridState, currentItems, offset)) {
                                                 is BookmarkGridItem.BookmarkItem -> {
+                                                    haptics.longPress()
                                                     if (selectionModeState &&
                                                         hitItem.bookmark.id in selectedIdsState
                                                     ) {
@@ -581,6 +668,7 @@ fun BookmarkListScreen(
                                                     }
                                                 }
                                                 is BookmarkGridItem.FolderItem -> {
+                                                    haptics.longPress()
                                                     isExtendingSelection = false
                                                     viewModel.clearSelection()
                                                     selectedFolder = FolderTarget(
@@ -599,12 +687,16 @@ fun BookmarkListScreen(
                                                     viewModel.onSelectionDragOver(dragHit.bookmark.id)
                                                 }
                                             } else {
+                                                val previousHoverTarget = reorderDrag?.hoverTargetId
                                                 reorderDrag = reorderDrag?.let { drag ->
                                                     val hoverHit = hitTestItem(gridState, currentItems, change.position)
                                                     val hoverTarget = (hoverHit as? BookmarkGridItem.BookmarkItem)
                                                         ?.bookmark?.id
                                                         ?.takeIf { it !in drag.draggedIds }
                                                     drag.copy(currentOffset = change.position, hoverTargetId = hoverTarget)
+                                                }
+                                                if (reorderDrag?.hoverTargetId != previousHoverTarget) {
+                                                    haptics.dragOverNewTarget()
                                                 }
                                             }
                                         },
@@ -614,6 +706,7 @@ fun BookmarkListScreen(
                                             } else {
                                                 reorderDrag?.let { drag ->
                                                     drag.hoverTargetId?.let { target ->
+                                                        haptics.reorderCommit()
                                                         viewModel.onReorderBookmarks(drag.draggedIds, target)
                                                     }
                                                 }
@@ -727,6 +820,16 @@ fun BookmarkListScreen(
             }
         }
 
+        // ブックマーク件数の節目を一度だけ祝う。タップ・スワイプを一切奪わないため
+        // (MilestoneCelebration自体はpointerInputを持たない)、表示中も一覧の操作は妨げない。
+        celebratingMilestone?.let { milestone ->
+            MilestoneCelebration(
+                milestone = milestone,
+                onDismiss = { celebratingMilestone = null },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
         pendingAutoThumbnailIds?.let { ids ->
             AlertDialog(
                 onDismissRequest = { pendingAutoThumbnailIds = null },
@@ -754,6 +857,7 @@ fun BookmarkListScreen(
                 text = { Text(stringResource(R.string.delete_selection_confirm_message)) },
                 confirmButton = {
                     TextButton(onClick = {
+                        haptics.confirm()
                         viewModel.onDeleteSelection()
                         pendingDeleteSelection = false
                     }) { Text(stringResource(R.string.delete_confirm_ok)) }
@@ -1002,14 +1106,23 @@ private fun GridScrollbar(
     if (columns <= 0 || totalItemCount == 0 || visibleItemsInfo.isEmpty()) return
 
     val totalRows = (totalItemCount + columns - 1) / columns
-    val firstVisibleRow = visibleItemsInfo.first().index / columns
+    val firstItem = visibleItemsInfo.first()
+    val firstVisibleRow = firstItem.index / columns
     val lastVisibleRow = visibleItemsInfo.last().index / columns
     val visibleRowCount = (lastVisibleRow - firstVisibleRow + 1).coerceIn(1, totalRows)
     // 一覧が1画面に収まっている(スクロール不要)場合はバーを出す意味がない。
     if (visibleRowCount >= totalRows) return
 
+    // 行番号(整数)だけで位置を出すと、1行分スクロールしきるまでバーが動かず
+    // かくつく。行の途中までのスクロール量(端数)も加味して、指の動きに
+    // なめらかに追従させる。
+    val density = LocalDensity.current
+    val rowStepPx = firstItem.size.height + with(density) { 16.dp.toPx() }
+    val subRowFraction = (-firstItem.offset.y / rowStepPx).coerceIn(0f, 1f)
+    val continuousFirstRow = firstVisibleRow + subRowFraction
+
     val scrollableRows = (totalRows - visibleRowCount).coerceAtLeast(1)
-    val progress = (firstVisibleRow.toFloat() / scrollableRows).coerceIn(0f, 1f)
+    val progress = (continuousFirstRow / scrollableRows).coerceIn(0f, 1f)
     val barFraction = (visibleRowCount.toFloat() / totalRows).coerceIn(0.06f, 1f)
 
     // フリング中も含めて操作している間だけ表示し、止まったら少し待ってフェードアウトする
@@ -1042,6 +1155,26 @@ private fun GridScrollbar(
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)),
             )
         }
+    }
+}
+
+// アイコンだけのボタンは見た目上は常に説明を出さず、長押し(またはマウスホバー)した
+// ときだけ標準のツールチップとして説明を出す。常時テキストを添えると窮屈になる
+// TopAppBarのアクション列でも、押し間違いを防ぐ手がかりを邪魔にならない形で出せる。
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TooltipIconButton(
+    tooltip: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    icon: @Composable () -> Unit,
+) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+        tooltip = { PlainTooltip { Text(tooltip) } },
+        state = rememberTooltipState(),
+    ) {
+        IconButton(onClick = onClick, enabled = enabled, content = icon)
     }
 }
 

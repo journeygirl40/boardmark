@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -54,7 +56,11 @@ private const val PRIVACY_POLICY_URL = "https://journeygirl40.github.io/boardmar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onSelectLabel: (Long) -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel(),
+) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var languagePickerVisible by remember { mutableStateOf(false) }
@@ -71,7 +77,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
     BackHandler(enabled = helpVisible) { helpVisible = false }
 
     if (labelManagementVisible) {
-        LabelManagementScreen(onBack = { labelManagementVisible = false })
+        LabelManagementScreen(onBack = { labelManagementVisible = false }, onSelectLabel = onSelectLabel)
         return
     }
 
@@ -116,6 +122,44 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
         ).show()
         if (success) {
             (context as? Activity)?.let { InterstitialAdManager.maybeShow(it, InterstitialAdManager.Trigger.EXPORT) }
+        }
+    }
+
+    // 完全バックアップは保存先が決まってからでないと書き出せないため、HTML版と違い
+    // 事前に内容を保持しておく必要はない(コールバック内でZIPを直接書き出す)。
+    val createBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch {
+            val success = runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { output -> viewModel.exportFullBackup(output) }
+            }.isSuccess
+            Toast.makeText(
+                context,
+                if (success) R.string.toast_full_backup_success else R.string.toast_full_backup_failed,
+                Toast.LENGTH_SHORT,
+            ).show()
+            if (success) {
+                (context as? Activity)?.let { InterstitialAdManager.maybeShow(it, InterstitialAdManager.Trigger.EXPORT) }
+            }
+        }
+    }
+
+    val restoreBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch {
+            val count = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { input -> viewModel.restoreFullBackup(context, input) }
+            }.getOrNull()
+            if (count == null) {
+                Toast.makeText(context, R.string.toast_full_backup_restore_failed, Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_full_backup_restore_result, count),
+                    Toast.LENGTH_SHORT,
+                ).show()
+                (context as? Activity)?.let { InterstitialAdManager.maybeShow(it, InterstitialAdManager.Trigger.IMPORT) }
+            }
         }
     }
 
@@ -204,6 +248,18 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                         createHtmlLauncher.launch("bookmarks.html")
                     }
                 },
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.full_backup_export_action)) },
+                supportingContent = { Text(stringResource(R.string.full_backup_export_summary)) },
+                leadingContent = { Icon(Icons.Filled.Backup, contentDescription = null) },
+                modifier = Modifier.clickable { createBackupLauncher.launch("boardmark_backup.zip") },
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.full_backup_restore_action)) },
+                supportingContent = { Text(stringResource(R.string.full_backup_restore_summary)) },
+                leadingContent = { Icon(Icons.Filled.SettingsBackupRestore, contentDescription = null) },
+                modifier = Modifier.clickable { restoreBackupLauncher.launch(arrayOf("application/zip")) },
             )
             ListItem(
                 headlineContent = { Text(stringResource(R.string.privacy_policy_action)) },

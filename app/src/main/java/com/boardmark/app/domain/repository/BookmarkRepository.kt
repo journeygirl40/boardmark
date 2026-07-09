@@ -12,6 +12,19 @@ data class TopLevelListing(
     val ungroupedBookmarks: List<Bookmark>,
 )
 
+/**
+ * 完全バックアップ用のスナップショット。HTML(Netscape形式)エクスポートと異なり、
+ * ラベル・並び順・サムネイル参照・フォルダの既定ブラウザまで含めて保持する。
+ * ここでのid(folder.id / bookmark.folderId)は、このスナップショット内で
+ * ブックマークとフォルダの対応関係を表すためだけのキーであり、復元先の実際のDBの
+ * IDとして再利用されるとは限らない(名前が一致する既存フォルダ/ラベルは再利用される)。
+ */
+data class FullBackupSnapshot(
+    val folders: List<Folder>,
+    val labels: List<Label>,
+    val bookmarks: List<Bookmark>,
+)
+
 interface BookmarkRepository {
 
     /** トップレベル(フォルダ+未分類ブックマークの混在)を検索クエリ付きで観測する。 */
@@ -22,6 +35,9 @@ interface BookmarkRepository {
 
     /** 移動先ダイアログ用の全フォルダ一覧(検索絞り込みなし)。 */
     fun observeFolders(): Flow<List<Folder>>
+
+    /** フォルダ・検索条件に関わらない全ブックマーク総数(件数マイルストーン検知用)。 */
+    fun observeTotalBookmarkCount(): Flow<Int>
 
     /**
      * Room に PENDING 行を即時 INSERT し、OGP取得のバックグラウンドWorkerを enqueue する。
@@ -71,6 +87,17 @@ interface BookmarkRepository {
 
     /** エクスポート用に、検索絞り込みなしの全ブックマークと全フォルダを一括取得する。 */
     suspend fun getAllForExport(): Pair<List<Bookmark>, List<Folder>>
+
+    /** 完全バックアップ用に、ラベル・並び順・サムネイル参照まで含めた全データを取得する。 */
+    suspend fun getFullBackupSnapshot(): FullBackupSnapshot
+
+    /**
+     * 完全バックアップを取り込む。フォルダ・ラベルは名前が一致する既存のものを再利用し、
+     * ブックマークはoriginalUrlが重複するものをスキップする(置き換えではなくマージ)。
+     * サムネイルのローカルファイル参照(ogImageUrl)は、呼び出し側で復元先の端末に実ファイルを
+     * コピーし、新しいパスに書き換え済みであることを前提とする。戻り値は実際に追加した件数。
+     */
+    suspend fun restoreFullBackup(snapshot: FullBackupSnapshot): Int
 
     /**
      * Netscapeブックマークファイル(Chrome等のHTMLエクスポート形式)を取り込む。

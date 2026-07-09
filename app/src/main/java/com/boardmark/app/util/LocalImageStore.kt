@@ -50,6 +50,21 @@ object LocalImageStore {
         }
     }
 
+    /**
+     * 完全バックアップの復元時に使う。バックアップ内の画像は保存時点で既にJPEGへ
+     * 圧縮・縮小済みのため、再デコード・再エンコードはせずバイト列をそのまま書き出す。
+     */
+    fun restoreBytesToInternalStorage(context: Context, bytes: ByteArray): String? {
+        return try {
+            val dir = File(context.filesDir, "thumbnails").apply { mkdirs() }
+            val file = File(dir, "${UUID.randomUUID()}.jpg")
+            file.outputStream().use { output -> output.write(bytes) }
+            file.toURI().toString()
+        } catch (e: IOException) {
+            null
+        }
+    }
+
     private fun downscaleIfNeeded(bitmap: Bitmap): Bitmap {
         val longerSide = max(bitmap.width, bitmap.height)
         if (longerSide <= MAX_DIMENSION) return bitmap
