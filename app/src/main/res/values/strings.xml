@@ -19,10 +19,11 @@
     <string name="toast_bookmark_already_exists">Already saved</string>
     <string name="toast_url_not_recognized">Could not recognize the URL</string>
     <string name="choose_thumbnail">Choose thumbnail</string>
+    <string name="choose_thumbnail_label">Thumbnail</string>
     <string name="thumbnail_size_label">Thumbnail size</string>
     <string name="selection_count">%1$d selected</string>
     <string name="action_clear_selection">Clear selection</string>
-    <string name="action_select_all">Select all</string>
+    <string name="action_select_all">All</string>
     <string name="action_move">Move</string>
     <string name="move_to_top_level">Top level (remove from folder)</string>
     <string name="move_to_new_folder">+ Create new folder</string>
@@ -36,7 +37,7 @@
     <string name="rename_folder_action">Rename folder</string>
     <string name="rename_folder_title">Rename folder</string>
     <string name="rename_folder_confirm">Rename</string>
-    <string name="rename_bookmark_action">Edit title</string>
+    <string name="rename_bookmark_action">Edit</string>
     <string name="rename_bookmark_title">Edit title</string>
     <string name="bookmark_title_hint">Title</string>
     <string name="thumbnail_pick_from_webpage">Select an area from the page</string>

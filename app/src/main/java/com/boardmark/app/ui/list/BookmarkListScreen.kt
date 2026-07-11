@@ -112,9 +112,13 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -277,82 +281,121 @@ fun BookmarkListScreen(
                     // ボタン同士が重なったりする)。全ボタンと件数表示を1本の横スクロール
                     // 可能なRowに並べ、幅が足りない端末でもスクロールで全ボタンに届くようにする。
                     Surface(color = MaterialTheme.colorScheme.surface) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        BoxWithConstraints(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .windowInsetsPadding(WindowInsets.statusBars)
                                 .heightIn(min = 64.dp),
                         ) {
-                            // ×(解除)は見た目だけで用途が明確なので、他のボタンと違い
-                            // ラベルを付けずアイコンのみにする。常に画面端に固定して、
-                            // 他のボタン欄をどれだけスクロールしても解除だけはすぐ押せるようにする。
-                            IconButton(onClick = viewModel::clearSelection) {
-                                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear_selection))
-                            }
-                            Text(
-                                stringResource(R.string.selection_count, uiState.selectedIds.size),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(end = 4.dp),
-                            )
+                            val countText = stringResource(R.string.selection_count, uiState.selectedIds.size)
+                            // スクロールさせず1画面に必ず収める方針のため、決め打ちサイズにせず
+                            // 実際の画面幅と件数テキストの実測幅から、収まる最大のアイコン
+                            // サイズをその場で計算する(端末や文字数が変わっても追従する)。
+                            val sizing = rememberSelectionBarSizing(maxWidth = maxWidth, countText = countText)
+                            // ×(解除)だけは見た目だけで用途が明確なので、他のボタンと違い
+                            // ラベルを付けずアイコンのみにし、常に画面の左端に固定する。
+                            // 残りは「件数+すべて」を左寄せ、「編集〜ゴミ箱」を右寄せにし、
+                            // 間の1箇所だけ可変の間隔にする。それぞれのグループ内はボタン同士
+                            // 同じ構造・同じパディングで並べ、間隔を均一にする。
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .horizontalScroll(rememberScrollState()),
+                                    .align(Alignment.CenterStart)
+                                    .fillMaxWidth()
+                                    .padding(start = sizing.iconSize + sizing.horizontalPadding * 2),
                             ) {
-                                LabeledIconButton(
-                                    icon = Icons.Filled.SelectAll,
-                                    label = stringResource(R.string.action_select_all),
-                                    onClick = viewModel::onSelectAll,
-                                )
-                                // 1件選択時にだけこのボタンを出し入れすると、後続のボタンの位置が
-                                // 選択件数によってずれてしまい押し間違いのもとになる。常に表示した
-                                // まま、名前変更が意味を持つ1件選択時だけ有効化することで位置を固定する。
-                                LabeledIconButton(
-                                    icon = Icons.Filled.Edit,
-                                    label = stringResource(R.string.rename_bookmark_action),
-                                    onClick = {
-                                        val id = uiState.selectedIds.single()
-                                        renameBookmarkTarget = uiState.gridItems
-                                            .filterIsInstance<BookmarkGridItem.BookmarkItem>()
-                                            .firstOrNull { it.bookmark.id == id }?.bookmark
-                                    },
-                                    enabled = uiState.selectedIds.size == 1,
-                                )
-                                LabeledIconButton(
-                                    icon = Icons.AutoMirrored.Filled.Label,
-                                    label = stringResource(R.string.assign_labels_action),
-                                    onClick = { labelDialogTargetIds = uiState.selectedIds },
-                                )
-                                LabeledIconButton(
-                                    icon = Icons.AutoMirrored.Filled.DriveFileMove,
-                                    label = stringResource(R.string.action_move),
-                                    onClick = { moveDialogVisible = true },
-                                )
-                                LabeledIconButton(
-                                    icon = Icons.Filled.Image,
-                                    label = stringResource(R.string.choose_thumbnail),
-                                    onClick = {
-                                        val ids = uiState.selectedIds
-                                        if (ids.size == 1) {
-                                            val id = ids.single()
-                                            thumbnailPickerBookmark = uiState.gridItems
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // アイコン+見えない下段テキストで高さを揃えているボタン群と
+                                    // 上下位置が合うよう、件数表示も同じ構造(見えない下段テキスト)
+                                    // にする。単なるTextのままだと1行分の高さしかなく、アイコンの
+                                    // 中心とずれて見えてしまうため。
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.padding(
+                                            horizontal = sizing.horizontalPadding,
+                                            vertical = sizing.verticalPadding,
+                                        ),
+                                    ) {
+                                        Text(
+                                            text = countText,
+                                            fontSize = sizing.fontSize,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            text = "",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = sizing.fontSize),
+                                            maxLines = 1,
+                                            modifier = Modifier.alpha(0f),
+                                        )
+                                    }
+                                    LabeledIconButton(
+                                        icon = Icons.Filled.SelectAll,
+                                        label = stringResource(R.string.action_select_all),
+                                        onClick = viewModel::onSelectAll,
+                                        sizing = sizing,
+                                    )
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // 1件選択時にだけこのボタンを出し入れすると、後続のボタンの位置が
+                                    // 選択件数によってずれてしまい押し間違いのもとになる。常に表示した
+                                    // まま、名前変更が意味を持つ1件選択時だけ有効化することで位置を固定する。
+                                    LabeledIconButton(
+                                        icon = Icons.Filled.Edit,
+                                        label = stringResource(R.string.rename_bookmark_action),
+                                        onClick = {
+                                            val id = uiState.selectedIds.single()
+                                            renameBookmarkTarget = uiState.gridItems
                                                 .filterIsInstance<BookmarkGridItem.BookmarkItem>()
                                                 .firstOrNull { it.bookmark.id == id }?.bookmark
-                                        } else {
-                                            pendingAutoThumbnailIds = ids
-                                        }
-                                    },
-                                )
+                                        },
+                                        enabled = uiState.selectedIds.size == 1,
+                                        sizing = sizing,
+                                    )
+                                    LabeledIconButton(
+                                        icon = Icons.AutoMirrored.Filled.Label,
+                                        label = stringResource(R.string.assign_labels_action),
+                                        onClick = { labelDialogTargetIds = uiState.selectedIds },
+                                        sizing = sizing,
+                                    )
+                                    LabeledIconButton(
+                                        icon = Icons.AutoMirrored.Filled.DriveFileMove,
+                                        label = stringResource(R.string.action_move),
+                                        onClick = { moveDialogVisible = true },
+                                        sizing = sizing,
+                                    )
+                                    LabeledIconButton(
+                                        icon = Icons.Filled.Image,
+                                        label = stringResource(R.string.choose_thumbnail_label),
+                                        onClick = {
+                                            val ids = uiState.selectedIds
+                                            if (ids.size == 1) {
+                                                val id = ids.single()
+                                                thumbnailPickerBookmark = uiState.gridItems
+                                                    .filterIsInstance<BookmarkGridItem.BookmarkItem>()
+                                                    .firstOrNull { it.bookmark.id == id }?.bookmark
+                                            } else {
+                                                pendingAutoThumbnailIds = ids
+                                            }
+                                        },
+                                        sizing = sizing,
+                                    )
+                                    UnlabeledIconButton(
+                                        icon = Icons.Filled.Delete,
+                                        contentDescription = stringResource(R.string.delete_confirm_ok),
+                                        onClick = { pendingDeleteSelection = true },
+                                        sizing = sizing,
+                                    )
+                                }
                             }
-                            // ゴミ箱アイコンも見た目だけで用途が明確なため、ラベルなしのまま
-                            // スクロール列の外側(右端固定)に置く。誤ってスクロールで見失って
-                            // 押せなくなる、ということがないようにするため。
-                            IconButton(onClick = { pendingDeleteSelection = true }) {
-                                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete_confirm_ok))
-                            }
+                            UnlabeledIconButton(
+                                icon = Icons.Filled.Close,
+                                contentDescription = stringResource(R.string.action_clear_selection),
+                                onClick = viewModel::clearSelection,
+                                sizing = sizing,
+                                modifier = Modifier.align(Alignment.CenterStart),
+                            )
                         }
                     }
                 } else if (selectedFolder != null) {
@@ -1200,6 +1243,64 @@ private fun TooltipIconButton(
     }
 }
 
+// 選択モードのツールバー(件数表示・LabeledIconButton・UnlabeledIconButton)で共通の
+// サイズ。決め打ちの数値ではなく、rememberSelectionBarSizingが実際の画面幅から
+// その場で計算する。3箇所でバラバラに数値を持つと調整のたびにズレる原因になる
+// ため、計算結果をこの1つにまとめて渡す。
+private data class SelectionBarSizing(
+    val iconSize: Dp,
+    val fontSize: TextUnit,
+    val horizontalPadding: Dp,
+    val verticalPadding: Dp,
+)
+
+// ×・すべて・編集・ラベル・移動・サムネ・ゴミ箱=アイコンのみのボタン7個(件数表示は
+// 別枠で加算)を並べたときに横スクロールなしで1画面に収まるよう、画面幅と件数
+// テキストの実測幅から「収まる最大のアイコンサイズ」を二分探索で求める。決め打ち
+// サイズだと画面幅の違う端末で入り切らなくなる/逆に無駄に余白ができるため、
+// 常にその場の画面幅に合わせて調整する。
+private const val SelectionBarFontToIconRatio = 13f / 30f
+private const val SelectionBarPaddingToIconRatio = 8f / 30f
+private const val SelectionBarVerticalPaddingToIconRatio = 6f / 30f
+private const val SelectionBarIconOnlyButtonCount = 7
+private const val SelectionBarMinGapDp = 24f
+private const val SelectionBarMinIconDp = 18f
+private const val SelectionBarMaxIconDp = 44f
+
+@Composable
+private fun rememberSelectionBarSizing(maxWidth: Dp, countText: String): SelectionBarSizing {
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    return remember(maxWidth, countText, density) {
+        fun totalWidthDp(iconDp: Float): Float {
+            val fontSp = iconDp * SelectionBarFontToIconRatio
+            val paddingDp = iconDp * SelectionBarPaddingToIconRatio
+            val countLayout = textMeasurer.measure(
+                text = countText,
+                style = TextStyle(fontSize = fontSp.sp),
+            )
+            val countTextWidthDp = with(density) { countLayout.size.width.toDp().value }
+            val countSlotWidthDp = countTextWidthDp + paddingDp * 2
+            val iconSlotWidthDp = iconDp + paddingDp * 2
+            return iconSlotWidthDp * SelectionBarIconOnlyButtonCount + countSlotWidthDp + SelectionBarMinGapDp
+        }
+
+        var lo = SelectionBarMinIconDp
+        var hi = SelectionBarMaxIconDp
+        repeat(24) {
+            val mid = (lo + hi) / 2f
+            if (totalWidthDp(mid) <= maxWidth.value) lo = mid else hi = mid
+        }
+
+        SelectionBarSizing(
+            iconSize = lo.dp,
+            fontSize = (lo * SelectionBarFontToIconRatio).sp,
+            horizontalPadding = (lo * SelectionBarPaddingToIconRatio).dp,
+            verticalPadding = (lo * SelectionBarVerticalPaddingToIconRatio).dp,
+        )
+    }
+}
+
 // 選択モードのツールバーは操作の種類が多く、長押しでしか出ないツールチップだと
 // 気づかれないまま押し間違えられやすい。そのためここだけはアイコンの下に常時
 // 短いラベルを出す。IconButtonは内部で幅を固定してしまい長いラベルがはみ出す
@@ -1209,6 +1310,7 @@ private fun LabeledIconButton(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
+    sizing: SelectionBarSizing,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
@@ -1217,15 +1319,44 @@ private fun LabeledIconButton(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick, enabled = enabled, role = Role.Button)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .padding(horizontal = sizing.horizontalPadding, vertical = sizing.verticalPadding)
             .alpha(if (enabled) 1f else 0.38f),
     ) {
-        Icon(icon, contentDescription = null)
+        Icon(icon, contentDescription = null, modifier = Modifier.size(sizing.iconSize))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = sizing.fontSize),
             maxLines = 1,
             softWrap = false,
+        )
+    }
+}
+
+// LabeledIconButtonと構造(パディング・文字スタイル分の高さ)を完全に揃えるための
+// ラベルなし版。見た目だけで用途が明確なアイコン(×・ゴミ箱)に使う。同じ高さの
+// 透明なテキストを確保しておくことで、ラベル付きボタンと並べたときにアイコンの
+// 上下位置がぴったり揃う(単純にIconButtonを混ぜるとラベル分の高さの差でずれる)。
+@Composable
+private fun UnlabeledIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    sizing: SelectionBarSizing,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick, role = Role.Button)
+            .padding(horizontal = sizing.horizontalPadding, vertical = sizing.verticalPadding),
+    ) {
+        Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(sizing.iconSize))
+        Text(
+            text = "",
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = sizing.fontSize),
+            maxLines = 1,
+            modifier = Modifier.alpha(0f),
         )
     }
 }
