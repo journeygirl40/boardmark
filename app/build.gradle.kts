@@ -27,7 +27,7 @@ android {
         applicationId = "com.journeygirl.boardmark"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        versionCode = 3
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -57,6 +57,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // 依存ライブラリ(広告SDK等)由来のネイティブ(.so)コードのクラッシュ解析用
+            // シンボルを、手動アップロード不要でAAB内に自動同梱する。
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
         }
     }
 
