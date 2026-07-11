@@ -364,15 +364,21 @@ fun BookmarkListScreen(
                     TopAppBar(
                         title = { Text(target.name) },
                         navigationIcon = {
-                            IconButton(onClick = { selectedFolder = null }) {
-                                Icon(Icons.Filled.Close, contentDescription = null)
+                            TooltipIconButton(
+                                tooltip = stringResource(R.string.action_clear_selection),
+                                onClick = { selectedFolder = null },
+                            ) {
+                                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear_selection))
                             }
                         },
                         actions = {
-                            IconButton(onClick = {
-                                deleteFolderTarget = target
-                                selectedFolder = null
-                            }) {
+                            TooltipIconButton(
+                                tooltip = stringResource(R.string.delete_folder_action),
+                                onClick = {
+                                    deleteFolderTarget = target
+                                    selectedFolder = null
+                                },
+                            ) {
                                 Icon(
                                     Icons.Filled.Delete,
                                     contentDescription = stringResource(R.string.delete_folder_action),
@@ -428,7 +434,8 @@ fun BookmarkListScreen(
                                             .onFocusChanged { searchFieldFocused = it.isFocused },
                                     )
                                     if (uiState.query.isNotEmpty()) {
-                                        IconButton(
+                                        TooltipIconButton(
+                                            tooltip = stringResource(R.string.action_clear_search),
                                             onClick = { viewModel.onQueryChange("") },
                                             modifier = Modifier.size(32.dp),
                                         ) {
@@ -444,15 +451,21 @@ fun BookmarkListScreen(
                         },
                         navigationIcon = {
                             if (uiState.currentFolderId != null) {
-                                IconButton(onClick = viewModel::onExitFolder) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                                TooltipIconButton(
+                                    tooltip = stringResource(R.string.action_back),
+                                    onClick = viewModel::onExitFolder,
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                                 }
                             }
                         },
                         actions = {
                             Box {
-                                IconButton(onClick = { sizeMenuExpanded = true }) {
-                                    Icon(Icons.Filled.PhotoSizeSelectLarge, contentDescription = null)
+                                TooltipIconButton(
+                                    tooltip = stringResource(R.string.thumbnail_size_label),
+                                    onClick = { sizeMenuExpanded = true },
+                                ) {
+                                    Icon(Icons.Filled.PhotoSizeSelectLarge, contentDescription = stringResource(R.string.thumbnail_size_label))
                                 }
                                 DropdownMenu(
                                     expanded = sizeMenuExpanded,
@@ -472,10 +485,16 @@ fun BookmarkListScreen(
                                     }
                                 }
                             }
-                            IconButton(onClick = { sortFilterSheetVisible = true }) {
-                                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null)
+                            TooltipIconButton(
+                                tooltip = stringResource(R.string.sort_section_title),
+                                onClick = { sortFilterSheetVisible = true },
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = stringResource(R.string.sort_section_title))
                             }
-                            IconButton(onClick = onOpenSettings) {
+                            TooltipIconButton(
+                                tooltip = stringResource(R.string.settings_action),
+                                onClick = onOpenSettings,
+                            ) {
                                 Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_action))
                             }
                         },
@@ -1166,6 +1185,7 @@ private fun GridScrollbar(
 private fun TooltipIconButton(
     tooltip: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
     icon: @Composable () -> Unit,
 ) {
@@ -1174,7 +1194,7 @@ private fun TooltipIconButton(
         tooltip = { PlainTooltip { Text(tooltip) } },
         state = rememberTooltipState(),
     ) {
-        IconButton(onClick = onClick, enabled = enabled, content = icon)
+        IconButton(onClick = onClick, modifier = modifier, enabled = enabled, content = icon)
     }
 }
 

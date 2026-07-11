@@ -10,6 +10,7 @@
     <string name="empty_state_filtered_message">検索条件を変えるか、ラベルの絞り込みを解除してみてください</string>
     <string name="search_placeholder">ブックマークを検索</string>
     <string name="action_clear_search">検索をクリア</string>
+    <string name="action_back">戻る</string>
     <string name="delete_confirm_title">削除しますか？</string>
     <string name="delete_confirm_message">このブックマークを削除します</string>
     <string name="delete_confirm_ok">削除</string>
