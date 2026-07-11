@@ -3,6 +3,8 @@
     <string name="app_name">Boardmark</string>
     <string name="milestone_first_message">First bookmark saved! 🎉</string>
     <string name="milestone_message">%1$d bookmarks saved! 🎉</string>
+    <string name="update_available_message">A new version is available</string>
+    <string name="update_available_action">Open Google Play</string>
     <string name="empty_state_title">Your board is empty</string>
     <string name="empty_state_message">Share a web page to save your first bookmark</string>
     <string name="empty_state_learn_more">How to add bookmarks</string>

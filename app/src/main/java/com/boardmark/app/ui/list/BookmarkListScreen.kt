@@ -74,8 +74,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -145,9 +147,11 @@ import com.boardmark.app.ui.components.RenameFolderDialog
 import com.boardmark.app.ui.components.SortAndFilterSheet
 import com.boardmark.app.ui.components.ThumbnailPickerDialog
 import com.boardmark.app.ui.components.WebThumbnailCaptureScreen
+import com.boardmark.app.update.UpdateChecker
 import com.boardmark.app.util.BrowserResolver
 import com.boardmark.app.util.LocalImageStore
 import com.boardmark.app.util.MilestonePreference
+import com.boardmark.app.util.UpdateNotificationPreference
 import com.boardmark.app.util.domainOf
 import com.boardmark.app.util.rememberHaptics
 import kotlinx.coroutines.coroutineScope
@@ -211,6 +215,27 @@ fun BookmarkListScreen(
 
     val screenScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Playに新しいバージョンが公開されているかを起動のたびに確認するが、通知自体は
+    // そのバージョンについて1回だけ(既読化はUpdateNotificationPreferenceで管理)。
+    val updateAvailableMessage = stringResource(R.string.update_available_message)
+    val updateAvailableAction = stringResource(R.string.update_available_action)
+    LaunchedEffect(Unit) {
+        val availableVersionCode = UpdateChecker.checkForUpdate(context)
+        if (availableVersionCode != null && UpdateNotificationPreference.shouldNotify(context, availableVersionCode)) {
+            // 表示より先に既読化しておくことで、構成変更等でこのEffectが再実行されても
+            // 二重に通知しないようにする。
+            UpdateNotificationPreference.markNotified(context, availableVersionCode)
+            val result = snackbarHostState.showSnackbar(
+                message = updateAvailableMessage,
+                actionLabel = updateAvailableAction,
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                UpdateChecker.openPlayStore(context)
+            }
+        }
+    }
 
     // サムネイル更新開始の2秒後に、件数に応じた確率でインタースティシャル広告を出す。
     // itemCountが10件以上(複数選択の一括更新)の場合はほぼ確定表示になる。

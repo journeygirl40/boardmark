@@ -3,6 +3,8 @@
     <string name="app_name">Boardmark</string>
     <string name="milestone_first_message">最初のブックマークを保存しました！ 🎉</string>
     <string name="milestone_message">%1$d件のブックマークを保存しました！ 🎉</string>
+    <string name="update_available_message">新しいバージョンがあります</string>
+    <string name="update_available_action">Google Playを開く</string>
     <string name="empty_state_title">まだ何もありません</string>
     <string name="empty_state_message">共有メニューから、最初のブックマークを追加してみましょう</string>
     <string name="empty_state_learn_more">登録方法を見る</string>

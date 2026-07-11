@@ -28,7 +28,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 3
-        versionName = "1.0"
+        versionName = "2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -124,6 +124,7 @@ dependencies {
 
     implementation(libs.play.services.ads)
     implementation(libs.billing.ktx)
+    implementation(libs.app.update.ktx)
 
     implementation(libs.kotlinx.coroutines.android)
 
