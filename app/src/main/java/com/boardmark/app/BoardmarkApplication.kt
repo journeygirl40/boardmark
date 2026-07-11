@@ -15,6 +15,7 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import com.boardmark.app.ads.AdFreeAccess
 import com.boardmark.app.ads.InterstitialAdManager
+import com.boardmark.app.ads.NativeAdManager
 import com.google.android.gms.ads.MobileAds
 import dagger.hilt.android.HiltAndroidApp
 import java.lang.ref.WeakReference
@@ -63,14 +64,18 @@ class BoardmarkApplication :
             // InterstitialAd.load(メインスレッド必須)はここから呼び出して問題ない。
             MobileAds.initialize(this@BoardmarkApplication) {
                 InterstitialAdManager.preload(this@BoardmarkApplication)
+                NativeAdManager.preload(this@BoardmarkApplication)
             }
         }
     }
 
     // アプリプロセスがフォアグラウンドに来るたび(コールドスタート・他アプリからの復帰いずれも)に呼ばれる。
     // 実際に表示できるかどうか(確率・クールダウン)の判定はInterstitialAdManager側が行う。
+    // ネイティブ広告も、この「アプリを開き直す」という自然な区切りでだけ更新する
+    // (NativeAdManager側に別途クールダウンがあり、短時間の連続起動では読み込み直さない)。
     override fun onStart(owner: LifecycleOwner) {
         currentActivity?.get()?.let { InterstitialAdManager.maybeShow(it, InterstitialAdManager.Trigger.APP_OPEN) }
+        NativeAdManager.preload(this)
     }
 
     override fun onActivityStarted(activity: Activity) {

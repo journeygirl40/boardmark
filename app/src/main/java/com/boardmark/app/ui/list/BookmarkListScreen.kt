@@ -128,8 +128,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.boardmark.app.R
+import com.boardmark.app.ads.AdFreeAccess
 import com.boardmark.app.ads.BannerAd
 import com.boardmark.app.ads.InterstitialAdManager
+import com.boardmark.app.ads.NativeAdManager
 import com.boardmark.app.domain.model.Bookmark
 import com.boardmark.app.domain.model.Label
 import com.boardmark.app.ui.components.BookmarkCard
@@ -139,6 +141,7 @@ import com.boardmark.app.ui.components.DuplicateResolutionDialog
 import com.boardmark.app.ui.components.EmptyBookmarksState
 import com.boardmark.app.ui.components.MilestoneCelebration
 import com.boardmark.app.ui.components.FolderTile
+import com.boardmark.app.ui.components.NativeAdCard
 import com.boardmark.app.ui.components.MoveToFolderDialog
 import com.boardmark.app.ui.components.NewFolderDialog
 import com.boardmark.app.ui.components.RenameBookmarkDialog
@@ -158,6 +161,14 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+// ネイティブ広告の挿入間隔。最初の広告は先頭からNativeAdFirstIndex件目に挿入し、
+// 以降はNativeAdRepeatInterval件おきに(一覧が長い場合のみ)繰り返し挿入する。
+// パーソナルなブックマーク管理という性質上、コンテンツフィード的なアプリより
+// 控えめな頻度・上限にしている。挿入枚数はNativeAdManagerが保持する広告の
+// 在庫(NATIVE_AD_POOL_SIZE)を超えない。
+private const val NativeAdFirstIndex = 4
+private const val NativeAdRepeatInterval = 8
 
 private data class FolderTarget(val id: Long, val name: String)
 
@@ -662,7 +673,28 @@ fun BookmarkListScreen(
                     )
                 }
             } else {
-                val currentItems by rememberUpdatedState(uiState.gridItems)
+                // ネイティブ広告は表示専用の枠として、業務データ(uiState.gridItems)には
+                // 混ぜずに画面側だけで挿入する。フォルダの中では挿入しない
+                // (広告だけが目立ってしまうため)。一覧が長いほどNativeAdRepeatInterval
+                // 件おきに繰り返し挿入するが、広告の在庫(nativeAds)を超えては挿入しない。
+                val nativeAds by NativeAdManager.nativeAds.collectAsState()
+                var isAdFree by remember { mutableStateOf(AdFreeAccess.isAdFree(context)) }
+                val displayItems = remember(uiState.gridItems, nativeAds, isAdFree, uiState.currentFolderId) {
+                    if (isAdFree || nativeAds.isEmpty() || uiState.currentFolderId != null ||
+                        uiState.gridItems.size < NativeAdFirstIndex
+                    ) {
+                        uiState.gridItems
+                    } else {
+                        uiState.gridItems.toMutableList().apply {
+                            for (slot in nativeAds.indices) {
+                                val originalIndex = NativeAdFirstIndex + slot * NativeAdRepeatInterval
+                                if (originalIndex > uiState.gridItems.size) break
+                                add(originalIndex + slot, BookmarkGridItem.NativeAdItem(slot))
+                            }
+                        }
+                    }
+                }
+                val currentItems by rememberUpdatedState(displayItems)
                 val selectionModeState by rememberUpdatedState(uiState.isSelectionMode)
                 val selectedIdsState by rememberUpdatedState(uiState.selectedIds)
 
@@ -714,6 +746,9 @@ fun BookmarkListScreen(
                                                             }
                                                         }
                                                     }
+                                                    // ネイティブ広告自体のクリック計測はAdMob SDK側(NativeAdView)が
+                                                    // 内部のViewで行うため、ここでは何もしない。
+                                                    is BookmarkGridItem.NativeAdItem -> {}
                                                     null -> {}
                                                 }
                                             }
@@ -759,6 +794,7 @@ fun BookmarkListScreen(
                                                         hitItem.data.folder.name,
                                                     )
                                                 }
+                                                is BookmarkGridItem.NativeAdItem -> isExtendingSelection = false
                                                 null -> isExtendingSelection = false
                                             }
                                         },
@@ -805,7 +841,7 @@ fun BookmarkListScreen(
                         },
                 ) {
                     items(
-                        uiState.gridItems,
+                        displayItems,
                         key = { it.key },
                         // フォルダとブックマークで構成が全く異なるため、種別ごとにcontentTypeを
                         // 分けることで、スクロールでアイテムが入れ替わる際のコンポジション再利用の
@@ -814,6 +850,7 @@ fun BookmarkListScreen(
                             when (item) {
                                 is BookmarkGridItem.FolderItem -> "folder"
                                 is BookmarkGridItem.BookmarkItem -> "bookmark"
+                                is BookmarkGridItem.NativeAdItem -> "native_ad"
                             }
                         },
                     ) { item ->
@@ -852,6 +889,11 @@ fun BookmarkListScreen(
                                         Modifier.animateItem()
                                     },
                                 )
+                            }
+                            is BookmarkGridItem.NativeAdItem -> {
+                                nativeAds.getOrNull(item.slotIndex)?.let { ad ->
+                                    NativeAdCard(nativeAd = ad, modifier = Modifier.animateItem())
+                                }
                             }
                         }
                     }
