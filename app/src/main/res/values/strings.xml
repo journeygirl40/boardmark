@@ -21,7 +21,6 @@
     <string name="choose_thumbnail">Choose thumbnail</string>
     <string name="thumbnail_size_label">Thumbnail size</string>
     <string name="selection_count">%1$d selected</string>
-    <string name="selection_hint_long_press">Tip: press and hold an icon to see what it does</string>
     <string name="action_clear_selection">Clear selection</string>
     <string name="action_select_all">Select all</string>
     <string name="action_move">Move</string>

@@ -26,6 +26,9 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,6 +38,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -92,6 +96,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -106,9 +111,12 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -136,7 +144,6 @@ import com.boardmark.app.ui.components.WebThumbnailCaptureScreen
 import com.boardmark.app.util.BrowserResolver
 import com.boardmark.app.util.LocalImageStore
 import com.boardmark.app.util.MilestonePreference
-import com.boardmark.app.util.SelectionHintPreference
 import com.boardmark.app.util.domainOf
 import com.boardmark.app.util.rememberHaptics
 import kotlinx.coroutines.coroutineScope
@@ -201,15 +208,6 @@ fun BookmarkListScreen(
     val screenScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // 選択モードのアイコンは長押しで説明が出るが、そのこと自体に気づきにくいため、
-    // 一番最初に選択モードへ入ったときだけ一度だけ知らせる(以降は二度と出さない)。
-    val selectionHintMessage = stringResource(R.string.selection_hint_long_press)
-    LaunchedEffect(uiState.isSelectionMode) {
-        if (uiState.isSelectionMode && !SelectionHintPreference.hasShownHint(context)) {
-            SelectionHintPreference.markHintShown(context)
-            snackbarHostState.showSnackbar(selectionHintMessage)
-        }
-    }
     // サムネイル更新開始の2秒後に、件数に応じた確率でインタースティシャル広告を出す。
     // itemCountが10件以上(複数選択の一括更新)の場合はほぼ確定表示になる。
     fun maybeShowThumbnailUpdateAd(itemCount: Int) {
@@ -273,92 +271,90 @@ fun BookmarkListScreen(
         Scaffold(
             topBar = {
                 if (uiState.isSelectionMode) {
-                    TopAppBar(
-                        title = { Text(stringResource(R.string.selection_count, uiState.selectedIds.size)) },
-                        navigationIcon = {
-                            TooltipIconButton(
-                                tooltip = stringResource(R.string.action_clear_selection),
-                                onClick = viewModel::clearSelection,
-                            ) {
+                    // ラベル付きボタンはアイコンだけの場合よりずっと横幅を食うため、
+                    // TopAppBarの title/navigationIcon/actionsという3スロット構成には
+                    // 乗せない(スロットごとの割り当て幅を越えるとタイトルが消えたり
+                    // ボタン同士が重なったりする)。全ボタンと件数表示を1本の横スクロール
+                    // 可能なRowに並べ、幅が足りない端末でもスクロールで全ボタンに届くようにする。
+                    Surface(color = MaterialTheme.colorScheme.surface) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .windowInsetsPadding(WindowInsets.statusBars)
+                                .heightIn(min = 64.dp),
+                        ) {
+                            // ×(解除)は見た目だけで用途が明確なので、他のボタンと違い
+                            // ラベルを付けずアイコンのみにする。常に画面端に固定して、
+                            // 他のボタン欄をどれだけスクロールしても解除だけはすぐ押せるようにする。
+                            IconButton(onClick = viewModel::clearSelection) {
                                 Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear_selection))
                             }
-                        },
-                        actions = {
-                            TooltipIconButton(
-                                tooltip = stringResource(R.string.action_select_all),
-                                onClick = viewModel::onSelectAll,
+                            Text(
+                                stringResource(R.string.selection_count, uiState.selectedIds.size),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(end = 4.dp),
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .horizontalScroll(rememberScrollState()),
                             ) {
-                                Icon(
-                                    Icons.Filled.SelectAll,
-                                    contentDescription = stringResource(R.string.action_select_all),
+                                LabeledIconButton(
+                                    icon = Icons.Filled.SelectAll,
+                                    label = stringResource(R.string.action_select_all),
+                                    onClick = viewModel::onSelectAll,
                                 )
-                            }
-                            // 1件選択時にだけこのボタンを出し入れすると、後続のボタンの位置が
-                            // 選択件数によってずれてしまい押し間違いのもとになる。常に表示した
-                            // まま、名前変更が意味を持つ1件選択時だけ有効化することで位置を固定する。
-                            TooltipIconButton(
-                                tooltip = stringResource(R.string.rename_bookmark_action),
-                                onClick = {
-                                    val id = uiState.selectedIds.single()
-                                    renameBookmarkTarget = uiState.gridItems
-                                        .filterIsInstance<BookmarkGridItem.BookmarkItem>()
-                                        .firstOrNull { it.bookmark.id == id }?.bookmark
-                                },
-                                enabled = uiState.selectedIds.size == 1,
-                            ) {
-                                Icon(
-                                    Icons.Filled.Edit,
-                                    contentDescription = stringResource(R.string.rename_bookmark_action),
-                                )
-                            }
-                            TooltipIconButton(
-                                tooltip = stringResource(R.string.assign_labels_action),
-                                onClick = { labelDialogTargetIds = uiState.selectedIds },
-                            ) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.Label,
-                                    contentDescription = stringResource(R.string.assign_labels_action),
-                                )
-                            }
-                            TooltipIconButton(
-                                tooltip = stringResource(R.string.action_move),
-                                onClick = { moveDialogVisible = true },
-                            ) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.DriveFileMove,
-                                    contentDescription = stringResource(R.string.action_move),
-                                )
-                            }
-                            TooltipIconButton(
-                                tooltip = stringResource(R.string.choose_thumbnail),
-                                onClick = {
-                                    val ids = uiState.selectedIds
-                                    if (ids.size == 1) {
-                                        val id = ids.single()
-                                        thumbnailPickerBookmark = uiState.gridItems
+                                // 1件選択時にだけこのボタンを出し入れすると、後続のボタンの位置が
+                                // 選択件数によってずれてしまい押し間違いのもとになる。常に表示した
+                                // まま、名前変更が意味を持つ1件選択時だけ有効化することで位置を固定する。
+                                LabeledIconButton(
+                                    icon = Icons.Filled.Edit,
+                                    label = stringResource(R.string.rename_bookmark_action),
+                                    onClick = {
+                                        val id = uiState.selectedIds.single()
+                                        renameBookmarkTarget = uiState.gridItems
                                             .filterIsInstance<BookmarkGridItem.BookmarkItem>()
                                             .firstOrNull { it.bookmark.id == id }?.bookmark
-                                    } else {
-                                        pendingAutoThumbnailIds = ids
-                                    }
-                                },
-                            ) {
-                                Icon(
-                                    Icons.Filled.Image,
-                                    contentDescription = stringResource(R.string.choose_thumbnail),
+                                    },
+                                    enabled = uiState.selectedIds.size == 1,
+                                )
+                                LabeledIconButton(
+                                    icon = Icons.AutoMirrored.Filled.Label,
+                                    label = stringResource(R.string.assign_labels_action),
+                                    onClick = { labelDialogTargetIds = uiState.selectedIds },
+                                )
+                                LabeledIconButton(
+                                    icon = Icons.AutoMirrored.Filled.DriveFileMove,
+                                    label = stringResource(R.string.action_move),
+                                    onClick = { moveDialogVisible = true },
+                                )
+                                LabeledIconButton(
+                                    icon = Icons.Filled.Image,
+                                    label = stringResource(R.string.choose_thumbnail),
+                                    onClick = {
+                                        val ids = uiState.selectedIds
+                                        if (ids.size == 1) {
+                                            val id = ids.single()
+                                            thumbnailPickerBookmark = uiState.gridItems
+                                                .filterIsInstance<BookmarkGridItem.BookmarkItem>()
+                                                .firstOrNull { it.bookmark.id == id }?.bookmark
+                                        } else {
+                                            pendingAutoThumbnailIds = ids
+                                        }
+                                    },
                                 )
                             }
-                            TooltipIconButton(
-                                tooltip = stringResource(R.string.delete_confirm_ok),
-                                onClick = { pendingDeleteSelection = true },
-                            ) {
-                                Icon(
-                                    Icons.Filled.Delete,
-                                    contentDescription = stringResource(R.string.delete_confirm_ok),
-                                )
+                            // ゴミ箱アイコンも見た目だけで用途が明確なため、ラベルなしのまま
+                            // スクロール列の外側(右端固定)に置く。誤ってスクロールで見失って
+                            // 押せなくなる、ということがないようにするため。
+                            IconButton(onClick = { pendingDeleteSelection = true }) {
+                                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete_confirm_ok))
                             }
-                        },
-                    )
+                        }
+                    }
                 } else if (selectedFolder != null) {
                     val target = selectedFolder!!
                     TopAppBar(
@@ -1201,6 +1197,36 @@ private fun TooltipIconButton(
         state = rememberTooltipState(),
     ) {
         IconButton(onClick = onClick, modifier = modifier, enabled = enabled, content = icon)
+    }
+}
+
+// 選択モードのツールバーは操作の種類が多く、長押しでしか出ないツールチップだと
+// 気づかれないまま押し間違えられやすい。そのためここだけはアイコンの下に常時
+// 短いラベルを出す。IconButtonは内部で幅を固定してしまい長いラベルがはみ出す
+// ため使わず、ボタンごとにラベルの実際の幅に合わせて自然に伸縮させる。
+@Composable
+private fun LabeledIconButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick, enabled = enabled, role = Role.Button)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .alpha(if (enabled) 1f else 0.38f),
+    ) {
+        Icon(icon, contentDescription = null)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 

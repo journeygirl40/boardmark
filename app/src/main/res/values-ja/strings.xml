@@ -21,7 +21,6 @@
     <string name="choose_thumbnail">サムネイルを選択</string>
     <string name="thumbnail_size_label">サムネイルサイズ</string>
     <string name="selection_count">%1$d件</string>
-    <string name="selection_hint_long_press">ヒント: アイコンを長押しすると説明が表示されます</string>
     <string name="action_clear_selection">選択を解除</string>
     <string name="action_select_all">すべて選択</string>
     <string name="action_move">移動</string>
