@@ -71,9 +71,13 @@ class BoardmarkApplication :
 
     // アプリプロセスがフォアグラウンドに来るたび(コールドスタート・他アプリからの復帰いずれも)に呼ばれる。
     // 実際に表示できるかどうか(確率・クールダウン)の判定はInterstitialAdManager側が行う。
+    // maybeShow自体はクールダウンや確率判定で早期returnすることが多く、その場合は
+    // 広告の期限切れチェックまで到達しないため、ここで毎回明示的にpreloadも呼び、
+    // 表示されないまま古い広告が期限切れになって以後読み込まれなくなることを防ぐ。
     // ネイティブ広告も、この「アプリを開き直す」という自然な区切りでだけ更新する
     // (NativeAdManager側に別途クールダウンがあり、短時間の連続起動では読み込み直さない)。
     override fun onStart(owner: LifecycleOwner) {
+        InterstitialAdManager.preload(this)
         currentActivity?.get()?.let { InterstitialAdManager.maybeShow(it, InterstitialAdManager.Trigger.APP_OPEN) }
         NativeAdManager.preload(this)
     }

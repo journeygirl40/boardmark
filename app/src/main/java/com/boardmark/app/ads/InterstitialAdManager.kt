@@ -38,6 +38,15 @@ private const val THUMBNAIL_UPDATE_FREQUENCY = 10
 private const val IMPORT_EQUIVALENT_ITEM_COUNT = 5
 
 /**
+ * 読み込み済みのインタースティシャル広告は、Google側の仕様でロードからおよそ1時間で
+ * 期限切れになりshow()しても表示されなくなる。表示条件(クールダウン・確率)を満たさない
+ * まま1時間近く経つと期限切れの広告がloadedAdに残り続け、preload()の「既にあれば何もしない」
+ * 判定に引っかかって以後ずっと新しい広告を読み込まなくなるため、少し余裕を持たせた
+ * この時間を過ぎたら古い広告を捨てて必ず読み込み直す。
+ */
+private const val AD_EXPIRATION_MILLIS = 50 * 60 * 1000L
+
+/**
  * インタースティシャル(全画面)広告を、自然な区切り(アプリ起動・インポート・エクスポート・
  * サムネイル更新)でのみ表示する。ブックマークを開く操作など、ユーザーの主要な操作の
  * 妨げにはならない箇所でのみ呼び出すこと。
@@ -47,9 +56,15 @@ object InterstitialAdManager {
     enum class Trigger { APP_OPEN, IMPORT, EXPORT, THUMBNAIL_UPDATE }
 
     private var loadedAd: InterstitialAd? = null
+    private var loadedAt: Long = 0L
     private var isLoading = false
 
+    private fun isLoadedAdStale(): Boolean =
+        loadedAd != null && System.currentTimeMillis() - loadedAt >= AD_EXPIRATION_MILLIS
+
     fun preload(context: Context) {
+        // 期限切れの広告は「読み込み済み」扱いにせず、必ず新しいものに差し替える。
+        if (isLoadedAdStale()) loadedAd = null
         if (AdFreeAccess.isAdFree(context) || isLoading || loadedAd != null) return
         isLoading = true
         InterstitialAd.load(
@@ -60,6 +75,7 @@ object InterstitialAdManager {
                 override fun onAdLoaded(ad: InterstitialAd) {
                     isLoading = false
                     loadedAd = ad
+                    loadedAt = System.currentTimeMillis()
                 }
 
                 override fun onAdFailedToLoad(error: LoadAdError) {
@@ -90,7 +106,13 @@ object InterstitialAdManager {
             Trigger.EXPORT -> Unit // 必須表示: 確率判定なし
         }
 
-        val ad = loadedAd ?: return
+        if (isLoadedAdStale()) loadedAd = null
+        val ad = loadedAd ?: run {
+            // 広告が無い(未読み込み・期限切れ)場合は今回は表示を諦めるが、次の機会には
+            // 表示できるよう、ここで改めて読み込みをキックしておく。
+            preload(activity)
+            return
+        }
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
                 loadedAd = null
