@@ -1127,10 +1127,6 @@ private fun GridScrollbar(
     val totalRows = (totalItemCount + columns - 1) / columns
     val firstItem = visibleItemsInfo.first()
     val firstVisibleRow = firstItem.index / columns
-    val lastVisibleRow = visibleItemsInfo.last().index / columns
-    val visibleRowCount = (lastVisibleRow - firstVisibleRow + 1).coerceIn(1, totalRows)
-    // 一覧が1画面に収まっている(スクロール不要)場合はバーを出す意味がない。
-    if (visibleRowCount >= totalRows) return
 
     // 行番号(整数)だけで位置を出すと、1行分スクロールしきるまでバーが動かず
     // かくつく。行の途中までのスクロール量(端数)も加味して、指の動きに
@@ -1140,9 +1136,19 @@ private fun GridScrollbar(
     val subRowFraction = (-firstItem.offset.y / rowStepPx).coerceIn(0f, 1f)
     val continuousFirstRow = firstVisibleRow + subRowFraction
 
-    val scrollableRows = (totalRows - visibleRowCount).coerceAtLeast(1)
+    // 「同時に何行分見えているか」はビューポートの高さから連続値で求める。
+    // visibleItemsInfoの件数(端で半端に見切れた行がスクロールにつれて出入りする
+    // ことで前後1行ぶれる)から数えると、位置は動かなくてもバーの長さ自体が
+    // スクロール中にガタついてしまうため使わない。
+    val viewportHeightPx = layoutInfo.viewportSize.height -
+        layoutInfo.beforeContentPadding - layoutInfo.afterContentPadding
+    val visibleRowCount = (viewportHeightPx / rowStepPx).coerceIn(1f, totalRows.toFloat())
+    // 一覧が1画面に収まっている(スクロール不要)場合はバーを出す意味がない。
+    if (visibleRowCount >= totalRows) return
+
+    val scrollableRows = (totalRows - visibleRowCount).coerceAtLeast(1f)
     val progress = (continuousFirstRow / scrollableRows).coerceIn(0f, 1f)
-    val barFraction = (visibleRowCount.toFloat() / totalRows).coerceIn(0.06f, 1f)
+    val barFraction = (visibleRowCount / totalRows).coerceIn(0.06f, 1f)
 
     // フリング中も含めて操作している間だけ表示し、止まったら少し待ってフェードアウトする
     // (常時表示すると一覧の見た目のノイズになるため)。

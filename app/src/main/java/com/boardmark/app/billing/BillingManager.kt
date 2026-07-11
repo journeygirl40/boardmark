@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /** Play Consoleにこのプロダクト ID(管理対象商品・買い切り)を作成し、価格を500円に設定しておくこと。 */
-const val AD_FREE_PRODUCT_ID = "ad_free_upgrade"
+const val AD_FREE_PRODUCT_ID = "boardmark_billing"
 
 /**
  * 広告非表示アップグレード(買い切り)のPlay Billing連携。アプリ全体で1つだけ接続を張り、
