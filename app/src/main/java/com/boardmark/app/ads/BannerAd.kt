@@ -2,6 +2,7 @@ package com.boardmark.app.ads
 
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,7 +32,7 @@ fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID
     // 固定のAdSize.BANNER(320x50dp)は、幅の広いタブレットでは画面に対して小さすぎて
     // 間延びして見える。実際に確保できた幅に合わせて高さも最適化される
     // アダプティブバナーを使うことで、端末サイズに関わらず自然な比率になる。
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth().navigationBarsPadding()) {
         val adWidthDp = maxWidth.value.toInt()
         AndroidView(
             modifier = Modifier.fillMaxWidth(),
