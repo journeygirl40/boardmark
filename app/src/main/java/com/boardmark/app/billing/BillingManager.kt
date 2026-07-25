@@ -68,9 +68,9 @@ class BillingManager @Inject constructor(
             .setProductType(BillingClient.ProductType.INAPP)
             .build()
         val params = QueryProductDetailsParams.newBuilder().setProductList(listOf(product)).build()
-        billingClient.queryProductDetailsAsync(params) { result, productDetailsList ->
+        billingClient.queryProductDetailsAsync(params) { result, productDetailsResult ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                _productDetails.value = productDetailsList.firstOrNull()
+                _productDetails.value = productDetailsResult.productDetailsList.firstOrNull()
             }
         }
     }

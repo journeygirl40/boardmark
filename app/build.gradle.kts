@@ -19,16 +19,16 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "com.boardmark.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         // Play Consoleに登録したパッケージ名。namespace(ソースコードのパッケージ)とは
         // 別物で一致させる必要はないため、大規模なパッケージ移動は行っていない。
         applicationId = "com.journeygirl.boardmark"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 7
-        versionName = "7.0"
+        targetSdk = 36
+        versionCode = 8
+        versionName = "8.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
