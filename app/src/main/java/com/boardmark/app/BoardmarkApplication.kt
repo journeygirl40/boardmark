@@ -13,16 +13,11 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
-import com.boardmark.app.ads.AdFreeAccess
 import com.boardmark.app.ads.InterstitialAdManager
 import com.boardmark.app.ads.NativeAdManager
-import com.google.android.gms.ads.MobileAds
 import dagger.hilt.android.HiltAndroidApp
 import java.lang.ref.WeakReference
 import javax.inject.Inject
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
 @HiltAndroidApp
@@ -57,16 +52,8 @@ class BoardmarkApplication :
         super<Application>.onCreate()
         registerActivityLifecycleCallbacks(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
-        // 買い切りで広告非表示済みの端末では、広告SDKの初期化自体を行わない。
-        if (AdFreeAccess.isAdFree(this)) return
-        CoroutineScope(Dispatchers.IO).launch {
-            // 完了リスナーはSDKがメインスレッドに戻して呼び出すため、
-            // InterstitialAd.load(メインスレッド必須)はここから呼び出して問題ない。
-            MobileAds.initialize(this@BoardmarkApplication) {
-                InterstitialAdManager.preload(this@BoardmarkApplication)
-                NativeAdManager.preload(this@BoardmarkApplication)
-            }
-        }
+        // 広告SDK(MobileAds/Unity Ads)の初期化はGDPR同意フォームの表示にActivityが
+        // 必要なため、ここではなくConsentManager経由でMainActivity.onCreateから行う。
     }
 
     // アプリプロセスがフォアグラウンドに来るたび(コールドスタート・他アプリからの復帰いずれも)に呼ばれる。

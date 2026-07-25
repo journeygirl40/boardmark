@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Policy
+import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.Upload
@@ -46,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.boardmark.app.R
+import com.boardmark.app.ads.ConsentManager
 import com.boardmark.app.ads.InterstitialAdManager
 import com.boardmark.app.ui.components.BrowserPickerDialog
 import com.boardmark.app.ui.components.LanguagePickerDialog
@@ -275,6 +277,18 @@ fun SettingsScreen(
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)))
                 },
             )
+            // GDPR対象地域(EEA/UK/スイス)の端末でのみ、同意フォームを表示・やり直す
+            // 導線を出す(Google UMPのポリシー上、対象地域では必須の導線)。
+            if (ConsentManager.isPrivacyOptionsRequired(context)) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.privacy_settings_action)) },
+                    supportingContent = { Text(stringResource(R.string.privacy_settings_summary)) },
+                    leadingContent = { Icon(Icons.Filled.PrivacyTip, contentDescription = null) },
+                    modifier = Modifier.clickable {
+                        (context as? Activity)?.let { ConsentManager.showPrivacyOptionsForm(it) }
+                    },
+                )
+            }
         }
     }
 

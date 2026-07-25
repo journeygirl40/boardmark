@@ -2,6 +2,7 @@ package com.boardmark.app.ads
 
 import android.app.Activity
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.boardmark.app.BuildConfig
 import com.google.android.gms.ads.AdError
@@ -10,6 +11,10 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
+import com.unity3d.ads.IUnityAdsLoadListener
+import com.unity3d.ads.IUnityAdsShowListener
+import com.unity3d.ads.UnityAds
+import com.unity3d.ads.UnityAdsShowOptions
 import kotlin.random.Random
 
 // デバッグビルドはGoogle公式のテスト用ID、リリースビルドは本番IDを使う。
@@ -59,6 +64,11 @@ object InterstitialAdManager {
     private var loadedAt: Long = 0L
     private var isLoading = false
 
+    // AdMob側が読み込めなかった場合(no-fillだけでなくSDK自体が機能しない場合も含む)の
+    // 独立したフォールバック用に、Unity Ads側の読み込み済み状態を別途保持する。
+    private var unityAdReady = false
+    private var isUnityLoading = false
+
     private fun isLoadedAdStale(): Boolean =
         loadedAd != null && System.currentTimeMillis() - loadedAt >= AD_EXPIRATION_MILLIS
 
@@ -81,6 +91,30 @@ object InterstitialAdManager {
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     isLoading = false
                     loadedAd = null
+                    preloadUnityFallback(context)
+                }
+            },
+        )
+    }
+
+    private fun preloadUnityFallback(context: Context) {
+        if (unityAdReady || isUnityLoading || !UnityAdsManager.isReady()) return
+        isUnityLoading = true
+        UnityAds.load(
+            UnityAdsManager.INTERSTITIAL_PLACEMENT_ID,
+            object : IUnityAdsLoadListener {
+                override fun onUnityAdsAdLoaded(placementId: String) {
+                    isUnityLoading = false
+                    unityAdReady = true
+                }
+
+                override fun onUnityAdsFailedToLoad(
+                    placementId: String,
+                    error: UnityAds.UnityAdsLoadError,
+                    message: String,
+                ) {
+                    isUnityLoading = false
+                    unityAdReady = false
                 }
             },
         )
@@ -107,10 +141,15 @@ object InterstitialAdManager {
         }
 
         if (isLoadedAdStale()) loadedAd = null
-        val ad = loadedAd ?: run {
-            // 広告が無い(未読み込み・期限切れ)場合は今回は表示を諦めるが、次の機会には
-            // 表示できるよう、ここで改めて読み込みをキックしておく。
-            preload(activity)
+        val ad = loadedAd
+        if (ad == null) {
+            if (unityAdReady) {
+                showUnityFallback(activity, prefs)
+            } else {
+                // 広告が無い(未読み込み・期限切れ)場合は今回は表示を諦めるが、次の機会には
+                // 表示できるよう、ここで改めて読み込みをキックしておく。
+                preload(activity)
+            }
             return
         }
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
@@ -126,5 +165,34 @@ object InterstitialAdManager {
             }
         }
         ad.show(activity)
+    }
+
+    private fun showUnityFallback(activity: Activity, prefs: SharedPreferences) {
+        unityAdReady = false
+        UnityAds.show(
+            activity,
+            UnityAdsManager.INTERSTITIAL_PLACEMENT_ID,
+            UnityAdsShowOptions(),
+            object : IUnityAdsShowListener {
+                override fun onUnityAdsShowFailure(
+                    placementId: String,
+                    error: UnityAds.UnityAdsShowError,
+                    message: String,
+                ) {
+                    preload(activity)
+                }
+
+                override fun onUnityAdsShowStart(placementId: String) = Unit
+                override fun onUnityAdsShowClick(placementId: String) = Unit
+
+                override fun onUnityAdsShowComplete(
+                    placementId: String,
+                    state: UnityAds.UnityAdsShowCompletionState,
+                ) {
+                    prefs.edit { putLong(KEY_LAST_SHOWN_AT, System.currentTimeMillis()) }
+                    preload(activity)
+                }
+            },
+        )
     }
 }

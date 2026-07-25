@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.boardmark.app.ads.ConsentManager
 import com.boardmark.app.ui.list.BookmarkListScreen
 import com.boardmark.app.ui.list.BookmarkListViewModel
 import com.boardmark.app.ui.settings.HelpScreen
@@ -21,6 +22,9 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // GDPR対象地域(EEA/UK/スイス)でのみ同意フォームを表示し、広告リクエスト可能と
+        // 判定された場合にMobileAds/Unity Adsを初期化する(プロセス内で一度だけ実行)。
+        ConsentManager.initializeAdsIfNeeded(this)
         enableEdgeToEdge()
         setContent {
             BoardmarkTheme {

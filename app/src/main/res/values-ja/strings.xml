@@ -121,6 +121,8 @@
     <string name="delete_label_confirm_title">ラベルを削除しますか？</string>
     <string name="delete_label_confirm_message">「%1$s」を%2$d件のブックマークから削除します。</string>
     <string name="privacy_policy_action">プライバシーポリシー</string>
+    <string name="privacy_settings_action">プライバシー設定</string>
+    <string name="privacy_settings_summary">広告の同意設定を変更します</string>
     <string name="add_bookmark_title">ブックマークを追加</string>
     <string name="add_bookmark_url_hint">URLを貼り付けまたは入力</string>
     <string name="add_bookmark_paste_action">クリップボードから貼り付け</string>
