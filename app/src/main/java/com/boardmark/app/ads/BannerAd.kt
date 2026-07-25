@@ -17,6 +17,7 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.LoadAdError
+import com.unity3d.services.banners.BannerErrorInfo
 import com.unity3d.services.banners.BannerView
 import com.unity3d.services.banners.UnityBannerSize
 
@@ -27,6 +28,8 @@ private val BANNER_AD_UNIT_ID = if (BuildConfig.DEBUG) {
     "ca-app-pub-3334691626809528/2245831448"
 }
 
+private enum class BannerState { GOOGLE, UNITY, HIDDEN }
+
 @Composable
 fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID) {
     val context = LocalContext.current
@@ -35,21 +38,37 @@ fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID
 
     // AdMob側がbannerの読み込みに失敗した場合(no-fillだけでなくSDK自体が機能しない
     // 場合も含む)は、独立したフォールバックとしてUnity Adsのバナーに切り替える。
-    var useUnityFallback by remember { mutableStateOf(false) }
+    // Unity側もSDK未初期化・読み込み失敗であればHIDDENにして、コンテンツの乗っていない
+    // 「黒い枠だけ」の広告欄を残さないようにする。
+    var state by remember { mutableStateOf(BannerState.GOOGLE) }
+    if (state == BannerState.HIDDEN) return
 
     // 固定のAdSize.BANNER(320x50dp)は、幅の広いタブレットでは画面に対して小さすぎて
     // 間延びして見える。実際に確保できた幅に合わせて高さも最適化される
     // アダプティブバナーを使うことで、端末サイズに関わらず自然な比率になる。
     BoxWithConstraints(modifier = modifier.fillMaxWidth().navigationBarsPadding()) {
         val adWidthDp = maxWidth.value.toInt()
-        if (useUnityFallback) {
+        if (state == BannerState.UNITY) {
             AndroidView(
                 modifier = Modifier.fillMaxWidth(),
                 factory = { viewContext ->
                     BannerView(viewContext, UnityAdsManager.BANNER_PLACEMENT_ID, UnityBannerSize(320, 50)).apply {
+                        listener = object : BannerView.IListener {
+                            override fun onBannerLoaded(bannerAdView: BannerView) = Unit
+
+                            override fun onBannerFailedToLoad(bannerAdView: BannerView, errorInfo: BannerErrorInfo) {
+                                // 読み込み失敗時は黒い枠だけを残さず、広告欄自体を折りたたむ。
+                                state = BannerState.HIDDEN
+                            }
+
+                            override fun onBannerClick(bannerAdView: BannerView) = Unit
+                            override fun onBannerShown(bannerAdView: BannerView) = Unit
+                            override fun onBannerLeftApplication(bannerAdView: BannerView) = Unit
+                        }
                         load()
                     }
                 },
+                onRelease = { it.destroy() },
             )
         } else {
             AndroidView(
@@ -60,7 +79,9 @@ fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID
                         this.adUnitId = adUnitId
                         adListener = object : AdListener() {
                             override fun onAdFailedToLoad(error: LoadAdError) {
-                                useUnityFallback = true
+                                // Unity Ads SDKがまだ初期化できていない場合は、確実に失敗する
+                                // リクエストを投げるだけになるため、フォールバックせず折りたたむ。
+                                state = if (UnityAdsManager.isReady()) BannerState.UNITY else BannerState.HIDDEN
                             }
                         }
                         loadAd(AdRequest.Builder().build())
