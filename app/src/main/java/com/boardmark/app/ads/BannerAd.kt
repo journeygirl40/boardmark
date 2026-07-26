@@ -2,6 +2,7 @@ package com.boardmark.app.ads
 
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -11,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.boardmark.app.BuildConfig
 import com.google.android.gms.ads.AdListener
@@ -50,6 +52,12 @@ fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID
     var awaitingUnityReady by remember { mutableStateOf(false) }
     if (state == BannerState.HIDDEN) return
 
+    // AndroidViewはfactoryでAdView/BannerViewを生成した時点で表示領域(高さ)を
+    // 確保してしまうため、読み込み成功前に一瞬「空の黒い枠」が見えてしまう。
+    // 実際にコンテンツが乗る(onAdLoaded/onBannerLoaded)まではheight 0にしておき、
+    // 広告が出ないまま失敗した場合は一度も枠が見えないようにする。
+    var isContentLoaded by remember(state) { mutableStateOf(false) }
+
     // Google失敗直後はUnity Ads SDKがまだ初期化中/未着手のことがあるため、即HIDDENに
     // 倒さずに一定時間だけ初期化完了を待ってからフォールバック可否を判定し直す。
     LaunchedEffect(awaitingUnityReady) {
@@ -65,13 +73,16 @@ fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID
     // アダプティブバナーを使うことで、端末サイズに関わらず自然な比率になる。
     BoxWithConstraints(modifier = modifier.fillMaxWidth().navigationBarsPadding()) {
         val adWidthDp = maxWidth.value.toInt()
+        val loadingModifier = Modifier.fillMaxWidth().let { if (isContentLoaded) it else it.height(0.dp) }
         if (state == BannerState.UNITY) {
             AndroidView(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = loadingModifier,
                 factory = { viewContext ->
                     BannerView(viewContext, UnityAdsManager.BANNER_PLACEMENT_ID, UnityBannerSize(320, 50)).apply {
                         listener = object : BannerView.IListener {
-                            override fun onBannerLoaded(bannerAdView: BannerView) = Unit
+                            override fun onBannerLoaded(bannerAdView: BannerView) {
+                                isContentLoaded = true
+                            }
 
                             override fun onBannerFailedToLoad(bannerAdView: BannerView, errorInfo: BannerErrorInfo) {
                                 // 読み込み失敗時は黒い枠だけを残さず、広告欄自体を折りたたむ。
@@ -89,12 +100,16 @@ fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID
             )
         } else {
             AndroidView(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = loadingModifier,
                 factory = { adViewContext ->
                     AdView(adViewContext).apply {
                         setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(adViewContext, adWidthDp))
                         this.adUnitId = adUnitId
                         adListener = object : AdListener() {
+                            override fun onAdLoaded() {
+                                isContentLoaded = true
+                            }
+
                             override fun onAdFailedToLoad(error: LoadAdError) {
                                 // 即座にisReady()で判定すると、GDPR同意フロー解決待ちで
                                 // Unity側の初期化がまだ終わっていないだけのケースまで
