@@ -11,7 +11,7 @@ import androidx.room.TypeConverters
         LabelEntity::class,
         BookmarkLabelCrossRef::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)

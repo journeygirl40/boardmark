@@ -7,6 +7,7 @@ import com.boardmark.app.data.local.ManualOrderPreference
 import com.boardmark.app.data.local.SortCriteriaPreference
 import com.boardmark.app.data.local.ThumbnailSizePreference
 import com.boardmark.app.domain.model.Bookmark
+import com.boardmark.app.domain.model.FolderPasswordUpdate
 import com.boardmark.app.domain.repository.BookmarkRepository
 import com.boardmark.app.domain.repository.TopLevelListing
 import com.boardmark.app.util.domainOf
@@ -40,6 +41,9 @@ class BookmarkListViewModel @Inject constructor(
     private val activeLabelFilter = MutableStateFlow<Set<Long>>(emptySet())
     private val thumbnailSize = MutableStateFlow(thumbnailSizePreference.get())
     private val currentFolderId = MutableStateFlow<Long?>(null)
+    // パスワード保護フォルダを一度解錠したら、アプリを終了するまでは再入力を求めない
+    // (プロセス生存中のみ有効。永続化はしない)。
+    private val unlockedFolderIds = MutableStateFlow<Set<Long>>(emptySet())
     private val selectedIds = MutableStateFlow<Set<Long>>(emptySet())
     private val isSelectionMode = MutableStateFlow(false)
 
@@ -213,6 +217,15 @@ class BookmarkListViewModel @Inject constructor(
         currentFolderId.value = folderId
     }
 
+    fun isFolderUnlocked(folderId: Long): Boolean = folderId in unlockedFolderIds.value
+
+    /** 入力パスワードを検証し、一致すればこのフォルダをプロセス生存中は解錠済み扱いにする。 */
+    suspend fun unlockFolder(folderId: Long, password: String): Boolean {
+        val correct = repository.verifyFolderPassword(folderId, password)
+        if (correct) unlockedFolderIds.update { it + folderId }
+        return correct
+    }
+
     fun onExitFolder() {
         clearSelection()
         query.value = ""
@@ -300,10 +313,10 @@ class BookmarkListViewModel @Inject constructor(
         }
     }
 
-    fun onCreateFolderAndMoveSelection(name: String) {
+    fun onCreateFolderAndMoveSelection(name: String, password: String?) {
         val ids = selectedIds.value
         viewModelScope.launch {
-            val newFolderId = repository.createFolder(name)
+            val newFolderId = repository.createFolder(name, password)
             repository.moveBookmarksToFolder(ids, newFolderId)
             clearSelection()
         }
@@ -324,8 +337,11 @@ class BookmarkListViewModel @Inject constructor(
         }
     }
 
-    fun onRenameFolder(folderId: Long, name: String) {
-        viewModelScope.launch { repository.renameFolder(folderId, name) }
+    fun onRenameFolder(folderId: Long, name: String, passwordUpdate: FolderPasswordUpdate) {
+        viewModelScope.launch {
+            repository.renameFolder(folderId, name)
+            repository.updateFolderPassword(folderId, passwordUpdate)
+        }
     }
 
     suspend fun fetchCandidateImages(bookmark: Bookmark): List<String> =

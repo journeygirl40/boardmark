@@ -35,4 +35,5 @@ fun FolderEntity.toDomain(): Folder = Folder(
     name = name,
     createdAt = createdAt,
     defaultBrowserPackage = defaultBrowserPackage,
+    isPasswordProtected = passwordHash != null,
 )

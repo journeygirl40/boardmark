@@ -142,4 +142,12 @@
     <string name="auto_thumbnail_confirm_message">This will automatically update %1$d item(s). For manual updates, update one item at a time.</string>
     <string name="auto_thumbnail_confirm_ok">Fetch</string>
     <string name="auto_thumbnail_progress">Fetching images… (%1$d/%2$d)</string>
+    <string name="folder_password_toggle">Set a password</string>
+    <string name="folder_password_hint">Password</string>
+    <string name="folder_password_hint_keep_current">Leave blank to keep the current password</string>
+    <string name="folder_password_required_error">Enter a password</string>
+    <string name="folder_password_protected_label">Password protected</string>
+    <string name="folder_locked_title">"%1$s" is locked</string>
+    <string name="folder_unlock_action">Unlock</string>
+    <string name="folder_unlock_error">Incorrect password</string>
 </resources>

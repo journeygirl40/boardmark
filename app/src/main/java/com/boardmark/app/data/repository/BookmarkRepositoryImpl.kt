@@ -19,12 +19,14 @@ import com.boardmark.app.data.remote.OgpFetcher
 import com.boardmark.app.domain.model.Bookmark
 import com.boardmark.app.domain.model.FetchStatus
 import com.boardmark.app.domain.model.Folder
+import com.boardmark.app.domain.model.FolderPasswordUpdate
 import com.boardmark.app.domain.model.FolderWithPreview
 import com.boardmark.app.domain.model.Label
 import com.boardmark.app.domain.repository.BookmarkRepository
 import com.boardmark.app.domain.repository.FullBackupSnapshot
 import com.boardmark.app.domain.repository.TopLevelListing
 import com.boardmark.app.util.BookmarkImporter
+import com.boardmark.app.util.FolderPasswordHasher
 import com.boardmark.app.worker.OgpFetchWorker
 import java.time.Instant
 import java.util.concurrent.TimeUnit
@@ -157,8 +159,22 @@ class BookmarkRepositoryImpl @Inject constructor(
         bookmarkDao.renameBookmark(bookmark.id, title)
     }
 
-    override suspend fun createFolder(name: String): Long =
-        folderDao.insert(FolderEntity(name = name, createdAt = Instant.now()))
+    override suspend fun createFolder(name: String, password: String?): Long {
+        var passwordHash: String? = null
+        var passwordSalt: String? = null
+        if (password != null) {
+            passwordSalt = FolderPasswordHasher.generateSalt()
+            passwordHash = FolderPasswordHasher.hash(password, passwordSalt)
+        }
+        return folderDao.insert(
+            FolderEntity(
+                name = name,
+                createdAt = Instant.now(),
+                passwordHash = passwordHash,
+                passwordSalt = passwordSalt,
+            ),
+        )
+    }
 
     override suspend fun deleteFolder(folderId: Long) {
         bookmarkDao.clearFolder(folderId)
@@ -167,6 +183,25 @@ class BookmarkRepositoryImpl @Inject constructor(
 
     override suspend fun renameFolder(folderId: Long, name: String) {
         folderDao.rename(folderId, name)
+    }
+
+    override suspend fun updateFolderPassword(folderId: Long, update: FolderPasswordUpdate) {
+        when (update) {
+            FolderPasswordUpdate.Unchanged -> Unit
+            FolderPasswordUpdate.Cleared -> folderDao.setPassword(folderId, passwordHash = null, passwordSalt = null)
+            is FolderPasswordUpdate.Changed -> {
+                val salt = FolderPasswordHasher.generateSalt()
+                val hash = FolderPasswordHasher.hash(update.password, salt)
+                folderDao.setPassword(folderId, passwordHash = hash, passwordSalt = salt)
+            }
+        }
+    }
+
+    override suspend fun verifyFolderPassword(folderId: Long, password: String): Boolean {
+        val entity = folderDao.findById(folderId) ?: return false
+        val hash = entity.passwordHash ?: return true
+        val salt = entity.passwordSalt ?: return true
+        return FolderPasswordHasher.matches(password, salt, hash)
     }
 
     override suspend fun reorderBookmark(bookmarkId: Long, order: Double) {

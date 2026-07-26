@@ -10,4 +10,7 @@ data class FolderEntity(
     val name: String,
     val createdAt: Instant,
     val defaultBrowserPackage: String? = null,
+    // 元のパスワードは保存せず、SHA-256+ソルトのハッシュのみ保持する(FolderPasswordHasher)。
+    val passwordHash: String? = null,
+    val passwordSalt: String? = null,
 )

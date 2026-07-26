@@ -1,9 +1,11 @@
 package com.boardmark.app.ads
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -11,8 +13,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.boardmark.app.BuildConfig
 import com.google.android.gms.ads.AdListener
@@ -52,11 +55,21 @@ fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID
     var awaitingUnityReady by remember { mutableStateOf(false) }
     if (state == BannerState.HIDDEN) return
 
-    // AndroidViewはfactoryでAdView/BannerViewを生成した時点で表示領域(高さ)を
-    // 確保してしまうため、読み込み成功前に一瞬「空の黒い枠」が見えてしまう。
-    // 実際にコンテンツが乗る(onAdLoaded/onBannerLoaded)まではheight 0にしておき、
-    // 広告が出ないまま失敗した場合は一度も枠が見えないようにする。
+    // 高さ0/INVISIBLEにして読み込み中を隠す方式は、Unity Ads側が実サイズ・表示可能な
+    // コンテナであることを読み込み完了(onBannerLoaded)の条件にしているらしく、
+    // 「読み込み完了まで隠す→隠れていると読み込みが完了しない」というデッドロックで
+    // Unityバナーが一切表示されなくなる不具合を引き起こした。そのため、サイズ・
+    // visibilityは常に実サイズ・VISIBLEのままにし、読み込み中の見た目だけを
+    // (1)テーマ背景色への合わせ込みと(2)Composeのalphaによるクロスフェードで隠す。
+    // どちらもView自体のサイズ/visibilityには影響しないため、SDK側のビューアビリティ
+    // 判定と衝突しない。
     var isContentLoaded by remember(state) { mutableStateOf(false) }
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (isContentLoaded) 1f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "bannerAdContentAlpha",
+    )
+    val containerBackgroundColor = MaterialTheme.colorScheme.background.toArgb()
 
     // Google失敗直後はUnity Ads SDKがまだ初期化中/未着手のことがあるため、即HIDDENに
     // 倒さずに一定時間だけ初期化完了を待ってからフォールバック可否を判定し直す。
@@ -73,10 +86,10 @@ fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID
     // アダプティブバナーを使うことで、端末サイズに関わらず自然な比率になる。
     BoxWithConstraints(modifier = modifier.fillMaxWidth().navigationBarsPadding()) {
         val adWidthDp = maxWidth.value.toInt()
-        val loadingModifier = Modifier.fillMaxWidth().let { if (isContentLoaded) it else it.height(0.dp) }
+        val adModifier = Modifier.fillMaxWidth().alpha(contentAlpha)
         if (state == BannerState.UNITY) {
             AndroidView(
-                modifier = loadingModifier,
+                modifier = adModifier,
                 factory = { viewContext ->
                     BannerView(viewContext, UnityAdsManager.BANNER_PLACEMENT_ID, UnityBannerSize(320, 50)).apply {
                         listener = object : BannerView.IListener {
@@ -96,11 +109,12 @@ fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID
                         load()
                     }
                 },
+                update = { view -> view.setBackgroundColor(containerBackgroundColor) },
                 onRelease = { it.destroy() },
             )
         } else {
             AndroidView(
-                modifier = loadingModifier,
+                modifier = adModifier,
                 factory = { adViewContext ->
                     AdView(adViewContext).apply {
                         setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(adViewContext, adWidthDp))
@@ -120,6 +134,7 @@ fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID
                         loadAd(AdRequest.Builder().build())
                     }
                 },
+                update = { view -> view.setBackgroundColor(containerBackgroundColor) },
             )
         }
     }

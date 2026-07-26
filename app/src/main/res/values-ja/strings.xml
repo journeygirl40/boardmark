@@ -142,4 +142,12 @@
     <string name="auto_thumbnail_confirm_message">%1$d件の自動更新を実施します。手動更新は1件ずつ更新してください。</string>
     <string name="auto_thumbnail_confirm_ok">取得</string>
     <string name="auto_thumbnail_progress">画像を取得中… (%1$d/%2$d)</string>
+    <string name="folder_password_toggle">パスワードを設定</string>
+    <string name="folder_password_hint">パスワード</string>
+    <string name="folder_password_hint_keep_current">変更しない場合は空欄のまま</string>
+    <string name="folder_password_required_error">パスワードを入力してください</string>
+    <string name="folder_password_protected_label">パスワード保護あり</string>
+    <string name="folder_locked_title">「%1$s」はロックされています</string>
+    <string name="folder_unlock_action">開く</string>
+    <string name="folder_unlock_error">パスワードが違います</string>
 </resources>

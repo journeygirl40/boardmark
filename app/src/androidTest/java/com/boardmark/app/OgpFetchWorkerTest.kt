@@ -11,6 +11,7 @@ import androidx.work.workDataOf
 import com.boardmark.app.data.remote.OgpFetcher
 import com.boardmark.app.domain.model.Bookmark
 import com.boardmark.app.domain.model.FetchStatus
+import com.boardmark.app.domain.model.FolderPasswordUpdate
 import com.boardmark.app.domain.model.Label
 import com.boardmark.app.domain.repository.BookmarkRepository
 import com.boardmark.app.domain.repository.TopLevelListing
@@ -146,11 +147,18 @@ class OgpFetchWorkerTest {
         override suspend fun setManualThumbnail(bookmark: Bookmark, imageUrl: String): Unit =
             throw UnsupportedOperationException()
 
-        override suspend fun createFolder(name: String): Long = throw UnsupportedOperationException()
+        override suspend fun createFolder(name: String, password: String?): Long =
+            throw UnsupportedOperationException()
 
         override suspend fun deleteFolder(folderId: Long): Unit = throw UnsupportedOperationException()
 
         override suspend fun renameFolder(folderId: Long, name: String): Unit =
+            throw UnsupportedOperationException()
+
+        override suspend fun updateFolderPassword(folderId: Long, update: FolderPasswordUpdate): Unit =
+            throw UnsupportedOperationException()
+
+        override suspend fun verifyFolderPassword(folderId: Long, password: String): Boolean =
             throw UnsupportedOperationException()
 
         override suspend fun moveBookmarksToFolder(bookmarkIds: Set<Long>, folderId: Long?): Unit =

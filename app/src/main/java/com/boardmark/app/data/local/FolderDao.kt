@@ -26,6 +26,9 @@ interface FolderDao {
     @Query("UPDATE folders SET defaultBrowserPackage = :packageName WHERE id = :id")
     suspend fun setDefaultBrowser(id: Long, packageName: String?)
 
+    @Query("UPDATE folders SET passwordHash = :passwordHash, passwordSalt = :passwordSalt WHERE id = :id")
+    suspend fun setPassword(id: Long, passwordHash: String?, passwordSalt: String?)
+
     @Query("DELETE FROM folders WHERE id = :id")
     suspend fun delete(id: Long)
 }

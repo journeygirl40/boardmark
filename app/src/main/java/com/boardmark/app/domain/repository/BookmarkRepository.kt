@@ -3,6 +3,7 @@ package com.boardmark.app.domain.repository
 import com.boardmark.app.domain.model.Bookmark
 import com.boardmark.app.domain.model.FetchStatus
 import com.boardmark.app.domain.model.Folder
+import com.boardmark.app.domain.model.FolderPasswordUpdate
 import com.boardmark.app.domain.model.FolderWithPreview
 import com.boardmark.app.domain.model.Label
 import kotlinx.coroutines.flow.Flow
@@ -67,14 +68,20 @@ interface BookmarkRepository {
     /** ブックマークのタイトルをユーザーが指定した文字列で上書きする。 */
     suspend fun renameBookmark(bookmark: Bookmark, title: String)
 
-    /** 新規フォルダを作成し、作成したフォルダのIDを返す。 */
-    suspend fun createFolder(name: String): Long
+    /** 新規フォルダを作成し、作成したフォルダのIDを返す。passwordを渡すとパスワード保護付きで作成する。 */
+    suspend fun createFolder(name: String, password: String?): Long
 
     /** フォルダを削除する。所属していたブックマークはトップレベル(未分類)に戻す。 */
     suspend fun deleteFolder(folderId: Long)
 
     /** フォルダの名前を変更する。 */
     suspend fun renameFolder(folderId: Long, name: String)
+
+    /** フォルダのパスワード保護設定を変更する。 */
+    suspend fun updateFolderPassword(folderId: Long, update: FolderPasswordUpdate)
+
+    /** 入力されたパスワードがフォルダに設定されたものと一致するか検証する(未設定なら常にtrue)。 */
+    suspend fun verifyFolderPassword(folderId: Long, password: String): Boolean
 
     /** ブックマークの手動並び順を更新する。 */
     suspend fun reorderBookmark(bookmarkId: Long, order: Double)

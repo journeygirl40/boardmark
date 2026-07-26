@@ -59,6 +59,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PhotoSizeSelectLarge
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
@@ -133,12 +134,14 @@ import com.boardmark.app.ads.BannerAd
 import com.boardmark.app.ads.InterstitialAdManager
 import com.boardmark.app.ads.NativeAdManager
 import com.boardmark.app.domain.model.Bookmark
+import com.boardmark.app.domain.model.FolderPasswordUpdate
 import com.boardmark.app.domain.model.Label
 import com.boardmark.app.ui.components.BookmarkCard
 import com.boardmark.app.ui.components.BookmarkGridSkeleton
 import com.boardmark.app.ui.components.BrowserPickerDialog
 import com.boardmark.app.ui.components.DuplicateResolutionDialog
 import com.boardmark.app.ui.components.EmptyBookmarksState
+import com.boardmark.app.ui.components.FolderUnlockDialog
 import com.boardmark.app.ui.components.MilestoneCelebration
 import com.boardmark.app.ui.components.FolderTile
 import com.boardmark.app.ui.components.NativeAdCard
@@ -211,6 +214,8 @@ fun BookmarkListScreen(
     var selectedFolder by remember { mutableStateOf<FolderTarget?>(null) }
     var renameFolderTarget by remember { mutableStateOf<FolderTarget?>(null) }
     var deleteFolderTarget by remember { mutableStateOf<FolderTarget?>(null) }
+    var pendingUnlockFolder by remember { mutableStateOf<FolderTarget?>(null) }
+    var unlockError by remember { mutableStateOf(false) }
     var thumbnailPickerBookmark by remember { mutableStateOf<Bookmark?>(null) }
     var renameBookmarkTarget by remember { mutableStateOf<Bookmark?>(null) }
     var webCaptureBookmark by remember { mutableStateOf<Bookmark?>(null) }
@@ -594,6 +599,9 @@ fun BookmarkListScreen(
                         val folderId = uiState.currentFolderId
                         if (folderId != null) {
                             val folderName = uiState.currentFolderName.orEmpty()
+                            val isCurrentFolderPasswordProtected = uiState.allFolders
+                                .find { it.id == folderId }
+                                ?.isPasswordProtected == true
                             val browserLabel = viewModel.resolveEffectiveBrowser()
                                 ?.let { BrowserResolver.labelFor(context, it) }
                                 ?: stringResource(R.string.default_browser_not_set)
@@ -617,6 +625,15 @@ fun BookmarkListScreen(
                                         modifier = Modifier.size(16.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
+                                    if (isCurrentFolderPasswordProtected) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            Icons.Filled.Lock,
+                                            contentDescription = stringResource(R.string.folder_password_protected_label),
+                                            modifier = Modifier.size(14.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = folderName,
@@ -721,7 +738,15 @@ fun BookmarkListScreen(
                                                 when (val hitItem = hitTestItem(gridState, currentItems, offset)) {
                                                     is BookmarkGridItem.FolderItem -> {
                                                         if (!selectionModeState) {
-                                                            viewModel.onEnterFolder(hitItem.data.folder.id)
+                                                            val folder = hitItem.data.folder
+                                                            if (folder.isPasswordProtected &&
+                                                                !viewModel.isFolderUnlocked(folder.id)
+                                                            ) {
+                                                                unlockError = false
+                                                                pendingUnlockFolder = FolderTarget(folder.id, folder.name)
+                                                            } else {
+                                                                viewModel.onEnterFolder(folder.id)
+                                                            }
                                                         }
                                                     }
                                                     is BookmarkGridItem.BookmarkItem -> {
@@ -1012,8 +1037,8 @@ fun BookmarkListScreen(
 
         if (newFolderDialogVisible) {
             NewFolderDialog(
-                onConfirm = { name ->
-                    viewModel.onCreateFolderAndMoveSelection(name)
+                onConfirm = { name, password ->
+                    viewModel.onCreateFolderAndMoveSelection(name, password)
                     newFolderDialogVisible = false
                 },
                 onDismiss = { newFolderDialogVisible = false },
@@ -1040,13 +1065,39 @@ fun BookmarkListScreen(
         }
 
         renameFolderTarget?.let { target ->
+            val hasPassword = uiState.allFolders.find { it.id == target.id }?.isPasswordProtected == true
             RenameFolderDialog(
                 currentName = target.name,
-                onConfirm = { name ->
-                    viewModel.onRenameFolder(target.id, name)
+                hasPassword = hasPassword,
+                onConfirm = { name, passwordUpdate ->
+                    viewModel.onRenameFolder(target.id, name, passwordUpdate)
                     renameFolderTarget = null
                 },
                 onDismiss = { renameFolderTarget = null },
+            )
+        }
+
+        pendingUnlockFolder?.let { target ->
+            FolderUnlockDialog(
+                folderName = target.name,
+                isError = unlockError,
+                onPasswordChange = { unlockError = false },
+                onConfirm = { password ->
+                    screenScope.launch {
+                        if (viewModel.unlockFolder(target.id, password)) {
+                            val folderId = target.id
+                            pendingUnlockFolder = null
+                            unlockError = false
+                            viewModel.onEnterFolder(folderId)
+                        } else {
+                            unlockError = true
+                        }
+                    }
+                },
+                onDismiss = {
+                    pendingUnlockFolder = null
+                    unlockError = false
+                },
             )
         }
 

@@ -9,6 +9,7 @@ data class Folder(
     val name: String,
     val createdAt: Instant,
     val defaultBrowserPackage: String? = null,
+    val isPasswordProtected: Boolean = false,
 )
 
 /**
