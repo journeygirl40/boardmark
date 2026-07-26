@@ -15,8 +15,8 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import com.boardmark.app.ads.InterstitialAdManager
 import com.boardmark.app.ads.NativeAdManager
+import com.boardmark.app.ui.MainActivity
 import dagger.hilt.android.HiltAndroidApp
-import java.lang.ref.WeakReference
 import javax.inject.Inject
 import okhttp3.OkHttpClient
 
@@ -31,9 +31,11 @@ class BoardmarkApplication :
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var okHttpClient: OkHttpClient
 
-    // アプリ全体が前面に来るたび(他アプリから復帰した場合も含む)に広告を出すため、
-    // その時点で表示中のActivityを覚えておく(ProcessLifecycleOwnerはActivityを渡してくれないため)。
-    private var currentActivity: WeakReference<Activity>? = null
+    // onStart(ActivityがまだonResume前でウィンドウのフォーカスを持たない可能性がある)の
+    // 時点で即座に全画面広告を出すと、Unity Adsのフルスクリーン表示がホストActivityの
+    // ウィンドウ遷移と競合し、黒画面のまま操作不能になることがある。そのため実際の
+    // maybeShow呼び出しは、Activityが完全にonResumeするタイミングまで遅らせる。
+    private var pendingAppOpenShow = false
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -63,22 +65,33 @@ class BoardmarkApplication :
     // 表示されないまま古い広告が期限切れになって以後読み込まれなくなることを防ぐ。
     // ネイティブ広告も、この「アプリを開き直す」という自然な区切りでだけ更新する
     // (NativeAdManager側に別途クールダウンがあり、短時間の連続起動では読み込み直さない)。
+    // 全画面広告の実際の表示は、まだウィンドウがフォーカスを持たないこの時点では行わず、
+    // 次にActivityがonResumeするタイミングまで遅らせる(onActivityResumed参照)。
     override fun onStart(owner: LifecycleOwner) {
         InterstitialAdManager.preload(this)
-        currentActivity?.get()?.let { InterstitialAdManager.maybeShow(it, InterstitialAdManager.Trigger.APP_OPEN) }
+        pendingAppOpenShow = true
         NativeAdManager.preload(this)
     }
 
-    override fun onActivityStarted(activity: Activity) {
-        currentActivity = WeakReference(activity)
-    }
+    override fun onActivityStarted(activity: Activity) = Unit
 
-    override fun onActivityStopped(activity: Activity) {
-        if (currentActivity?.get() === activity) currentActivity = null
-    }
+    override fun onActivityStopped(activity: Activity) = Unit
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-    override fun onActivityResumed(activity: Activity) = Unit
+
+    // アプリ起動直後にUnity Ads等の全画面広告を出そうとすると、ホストActivityが
+    // まだウィンドウフォーカスを得ていないタイミングと競合し、黒画面のまま操作不能になる
+    // 不具合が発生していたため、Activityが確実にresumeし終えたこのタイミングまで待つ。
+    // また、共有インテント受信用のShareReceiverActivity(透明・処理後すぐ自身をfinishする)
+    // など、UIを持たない/一瞬で終了するActivity上に全画面広告を出すと、広告のウィンドウが
+    // ホストを失って黒画面のまま残ってしまうため、必ずMainActivity上でのみ表示する。
+    override fun onActivityResumed(activity: Activity) {
+        if (pendingAppOpenShow && activity is MainActivity) {
+            pendingAppOpenShow = false
+            InterstitialAdManager.maybeShow(activity, InterstitialAdManager.Trigger.APP_OPEN)
+        }
+    }
+
     override fun onActivityPaused(activity: Activity) = Unit
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
     override fun onActivityDestroyed(activity: Activity) = Unit

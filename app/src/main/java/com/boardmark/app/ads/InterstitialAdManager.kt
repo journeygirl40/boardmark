@@ -3,6 +3,8 @@ package com.boardmark.app.ads
 import android.app.Activity
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.edit
 import com.boardmark.app.BuildConfig
 import com.google.android.gms.ads.AdError
@@ -52,6 +54,14 @@ private const val IMPORT_EQUIVALENT_ITEM_COUNT = 5
 private const val AD_EXPIRATION_MILLIS = 50 * 60 * 1000L
 
 /**
+ * UnityAds.show()呼び出し後、この時間内に描画開始(onUnityAdsShowStart)も結果通知
+ * (Failure/Complete)も一切来ない場合、SDK内部で処理が詰まっていると判断し、次回以降
+ * また広告を出せるよう強制的に読み込みをやり直す(コールバックが永久に来ないまま
+ * unityAdReadyがfalseに固まり、以後フォールバックが機能しなくなることの再発防止)。
+ */
+private const val UNITY_SHOW_WATCHDOG_MILLIS = 10 * 1000L
+
+/**
  * インタースティシャル(全画面)広告を、自然な区切り(アプリ起動・インポート・エクスポート・
  * サムネイル更新)でのみ表示する。ブックマークを開く操作など、ユーザーの主要な操作の
  * 妨げにはならない箇所でのみ呼び出すこと。
@@ -63,6 +73,8 @@ object InterstitialAdManager {
     private var loadedAd: InterstitialAd? = null
     private var loadedAt: Long = 0L
     private var isLoading = false
+
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     // AdMob側が読み込めなかった場合(no-fillだけでなくSDK自体が機能しない場合も含む)の
     // 独立したフォールバック用に、Unity Ads側の読み込み済み状態を別途保持する。
@@ -129,6 +141,9 @@ object InterstitialAdManager {
      * 広告の読み込みが間に合っていない場合は何もしない(ユーザーの操作を待たせない)。
      */
     fun maybeShow(activity: Activity, trigger: Trigger, itemCount: Int = 1) {
+        // Activityが破棄中/終了中の状態で全画面広告を出そうとすると、ウィンドウ遷移が
+        // 競合し黒画面のまま操作不能になることがあるため、表示可能な状態でなければ諦める。
+        if (activity.isFinishing || activity.isDestroyed) return
         if (AdFreeAccess.isAdFree(activity)) return
         val prefs = activity.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
@@ -169,6 +184,18 @@ object InterstitialAdManager {
 
     private fun showUnityFallback(activity: Activity, prefs: SharedPreferences) {
         unityAdReady = false
+
+        // resolved済みかどうかをウォッチドッグとコールバックの両方から参照するため、
+        // 呼び出しごとに新しいフラグ/Runnableを作る(前回分の状態を引きずらないように)。
+        var resolved = false
+        val watchdog = Runnable {
+            if (!resolved) {
+                resolved = true
+                preload(activity)
+            }
+        }
+        mainHandler.postDelayed(watchdog, UNITY_SHOW_WATCHDOG_MILLIS)
+
         UnityAds.show(
             activity,
             UnityAdsManager.INTERSTITIAL_PLACEMENT_ID,
@@ -179,16 +206,27 @@ object InterstitialAdManager {
                     error: UnityAds.UnityAdsShowError,
                     message: String,
                 ) {
+                    if (resolved) return
+                    resolved = true
+                    mainHandler.removeCallbacks(watchdog)
                     preload(activity)
                 }
 
-                override fun onUnityAdsShowStart(placementId: String) = Unit
+                // 描画が実際に始まったことが確認できたので、詰まっている扱いにする
+                // ウォッチドッグは解除する(この後はComplete/Failureを正常に待つ)。
+                override fun onUnityAdsShowStart(placementId: String) {
+                    mainHandler.removeCallbacks(watchdog)
+                }
+
                 override fun onUnityAdsShowClick(placementId: String) = Unit
 
                 override fun onUnityAdsShowComplete(
                     placementId: String,
                     state: UnityAds.UnityAdsShowCompletionState,
                 ) {
+                    if (resolved) return
+                    resolved = true
+                    mainHandler.removeCallbacks(watchdog)
                     prefs.edit { putLong(KEY_LAST_SHOWN_AT, System.currentTimeMillis()) }
                     preload(activity)
                 }
