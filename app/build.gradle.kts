@@ -27,8 +27,8 @@ android {
         applicationId = "com.journeygirl.boardmark"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "11.0"
+        versionCode = 12
+        versionName = "12.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

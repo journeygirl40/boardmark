@@ -154,7 +154,6 @@ import com.boardmark.app.update.UpdateChecker
 import com.boardmark.app.util.BrowserResolver
 import com.boardmark.app.util.LocalImageStore
 import com.boardmark.app.util.MilestonePreference
-import com.boardmark.app.util.UpdateNotificationPreference
 import com.boardmark.app.util.domainOf
 import com.boardmark.app.util.rememberHaptics
 import kotlinx.coroutines.coroutineScope
@@ -227,16 +226,13 @@ fun BookmarkListScreen(
     val screenScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Playに新しいバージョンが公開されているかを起動のたびに確認するが、通知自体は
-    // そのバージョンについて1回だけ(既読化はUpdateNotificationPreferenceで管理)。
+    // Playに新しいバージョンが公開されているかを起動のたびに確認し、更新済みになるまで
+    // 毎回通知する。
     val updateAvailableMessage = stringResource(R.string.update_available_message)
     val updateAvailableAction = stringResource(R.string.update_available_action)
     LaunchedEffect(Unit) {
         val availableVersionCode = UpdateChecker.checkForUpdate(context)
-        if (availableVersionCode != null && UpdateNotificationPreference.shouldNotify(context, availableVersionCode)) {
-            // 表示より先に既読化しておくことで、構成変更等でこのEffectが再実行されても
-            // 二重に通知しないようにする。
-            UpdateNotificationPreference.markNotified(context, availableVersionCode)
+        if (availableVersionCode != null) {
             val result = snackbarHostState.showSnackbar(
                 message = updateAvailableMessage,
                 actionLabel = updateAvailableAction,

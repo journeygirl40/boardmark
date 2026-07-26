@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +31,11 @@ private val BANNER_AD_UNIT_ID = if (BuildConfig.DEBUG) {
 
 private enum class BannerState { GOOGLE, UNITY, HIDDEN }
 
+// GDPR同意フロー解決後にUnity Ads SDKの初期化が走る非同期構成のため、Googleの
+// 読み込み失敗時点ではUnity側がまだ初期化中/未着手であることが珍しくない。
+// この時間だけ初期化完了を待ってからUnityへのフォールバック可否を判定する。
+private const val UNITY_READY_TIMEOUT_MS = 8_000L
+
 @Composable
 fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID) {
     val context = LocalContext.current
@@ -41,7 +47,18 @@ fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID
     // Unity側もSDK未初期化・読み込み失敗であればHIDDENにして、コンテンツの乗っていない
     // 「黒い枠だけ」の広告欄を残さないようにする。
     var state by remember { mutableStateOf(BannerState.GOOGLE) }
+    var awaitingUnityReady by remember { mutableStateOf(false) }
     if (state == BannerState.HIDDEN) return
+
+    // Google失敗直後はUnity Ads SDKがまだ初期化中/未着手のことがあるため、即HIDDENに
+    // 倒さずに一定時間だけ初期化完了を待ってからフォールバック可否を判定し直す。
+    LaunchedEffect(awaitingUnityReady) {
+        if (awaitingUnityReady) {
+            val ready = UnityAdsManager.awaitReady(UNITY_READY_TIMEOUT_MS)
+            state = if (ready) BannerState.UNITY else BannerState.HIDDEN
+            awaitingUnityReady = false
+        }
+    }
 
     // 固定のAdSize.BANNER(320x50dp)は、幅の広いタブレットでは画面に対して小さすぎて
     // 間延びして見える。実際に確保できた幅に合わせて高さも最適化される
@@ -79,9 +96,10 @@ fun BannerAd(modifier: Modifier = Modifier, adUnitId: String = BANNER_AD_UNIT_ID
                         this.adUnitId = adUnitId
                         adListener = object : AdListener() {
                             override fun onAdFailedToLoad(error: LoadAdError) {
-                                // Unity Ads SDKがまだ初期化できていない場合は、確実に失敗する
-                                // リクエストを投げるだけになるため、フォールバックせず折りたたむ。
-                                state = if (UnityAdsManager.isReady()) BannerState.UNITY else BannerState.HIDDEN
+                                // 即座にisReady()で判定すると、GDPR同意フロー解決待ちで
+                                // Unity側の初期化がまだ終わっていないだけのケースまで
+                                // 拾えずに折りたたんでしまうため、初期化完了を少し待つ。
+                                awaitingUnityReady = true
                             }
                         }
                         loadAd(AdRequest.Builder().build())
