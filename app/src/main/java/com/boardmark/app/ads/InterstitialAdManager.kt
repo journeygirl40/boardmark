@@ -62,6 +62,26 @@ private const val AD_EXPIRATION_MILLIS = 50 * 60 * 1000L
 private const val UNITY_SHOW_WATCHDOG_MILLIS = 10 * 1000L
 
 /**
+ * 描画開始(onUnityAdsShowStart)は通知されたのに、その後Complete/Failureのどちらも
+ * 一切来ない場合の保護。開始後は計測ping・追加アセット取得などSDK内部の処理が
+ * 続くため、開始前のUNITY_SHOW_WATCHDOG_MILLISより長い猶予を持たせる
+ * (正常に再生中の動画/プレイアブル広告を誤って強制回収しないため)。
+ */
+private const val UNITY_SHOW_POST_START_WATCHDOG_MILLIS = 45 * 1000L
+
+/**
+ * AdMob側のInterstitialAd.show()呼び出し後、この時間内にFullScreenContentCallbackの
+ * いずれのコールバック(表示成功/失敗/終了)も来ない場合の保護。AdMobは通常watchdog不要
+ * だが、アプリ復帰直後のウィンドウ遷移とごく稀に競合し黒画面のまま操作不能になる
+ * (Unity Ads側でUNITY_SHOW_WATCHDOG_MILLISとして対処済みの不具合と同種)ことがあるため、
+ * AdMob側にも同じ保護を入れる。
+ */
+private const val ADMOB_SHOW_WATCHDOG_MILLIS = 10 * 1000L
+
+/** AdMob版のUNITY_SHOW_POST_START_WATCHDOG_MILLIS。開始通知後も同様の保護を行う。 */
+private const val ADMOB_SHOW_POST_START_WATCHDOG_MILLIS = 45 * 1000L
+
+/**
  * インタースティシャル(全画面)広告を、自然な区切り(アプリ起動・インポート・エクスポート・
  * サムネイル更新)でのみ表示する。ブックマークを開く操作など、ユーザーの主要な操作の
  * 妨げにはならない箇所でのみ呼び出すこと。
@@ -167,14 +187,49 @@ object InterstitialAdManager {
             }
             return
         }
+        // resolved済みかどうかをウォッチドッグとコールバックの両方から参照するため、
+        // 呼び出しごとに新しいフラグ/Runnableを作る(前回分の状態を引きずらないように)。
+        var resolved = false
+        val watchdog = Runnable {
+            if (!resolved) {
+                resolved = true
+                loadedAd = null
+                preload(activity)
+            }
+        }
+        mainHandler.postDelayed(watchdog, ADMOB_SHOW_WATCHDOG_MILLIS)
+        val postStartWatchdog = Runnable {
+            if (!resolved) {
+                resolved = true
+                loadedAd = null
+                preload(activity)
+            }
+        }
+
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            // 描画が実際に始まったことが確認できたので、開始前ウォッチドッグは解除するが、
+            // その後Dismissed/FailedToShowのどちらも来ないまま詰まるケースに備え、
+            // より長い猶予の第二段階ウォッチドッグに切り替える。
+            override fun onAdShowedFullScreenContent() {
+                mainHandler.removeCallbacks(watchdog)
+                mainHandler.postDelayed(postStartWatchdog, ADMOB_SHOW_POST_START_WATCHDOG_MILLIS)
+            }
+
             override fun onAdDismissedFullScreenContent() {
+                if (resolved) return
+                resolved = true
+                mainHandler.removeCallbacks(watchdog)
+                mainHandler.removeCallbacks(postStartWatchdog)
                 loadedAd = null
                 prefs.edit { putLong(KEY_LAST_SHOWN_AT, System.currentTimeMillis()) }
                 preload(activity)
             }
 
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                if (resolved) return
+                resolved = true
+                mainHandler.removeCallbacks(watchdog)
+                mainHandler.removeCallbacks(postStartWatchdog)
                 loadedAd = null
                 preload(activity)
             }
@@ -195,6 +250,12 @@ object InterstitialAdManager {
             }
         }
         mainHandler.postDelayed(watchdog, UNITY_SHOW_WATCHDOG_MILLIS)
+        val postStartWatchdog = Runnable {
+            if (!resolved) {
+                resolved = true
+                preload(activity)
+            }
+        }
 
         UnityAds.show(
             activity,
@@ -209,13 +270,16 @@ object InterstitialAdManager {
                     if (resolved) return
                     resolved = true
                     mainHandler.removeCallbacks(watchdog)
+                    mainHandler.removeCallbacks(postStartWatchdog)
                     preload(activity)
                 }
 
-                // 描画が実際に始まったことが確認できたので、詰まっている扱いにする
-                // ウォッチドッグは解除する(この後はComplete/Failureを正常に待つ)。
+                // 描画が実際に始まったことが確認できたので、開始前ウォッチドッグは解除するが、
+                // その後Complete/Failureのどちらも来ないまま詰まるケースに備え、
+                // より長い猶予の第二段階ウォッチドッグに切り替える。
                 override fun onUnityAdsShowStart(placementId: String) {
                     mainHandler.removeCallbacks(watchdog)
+                    mainHandler.postDelayed(postStartWatchdog, UNITY_SHOW_POST_START_WATCHDOG_MILLIS)
                 }
 
                 override fun onUnityAdsShowClick(placementId: String) = Unit
@@ -227,6 +291,7 @@ object InterstitialAdManager {
                     if (resolved) return
                     resolved = true
                     mainHandler.removeCallbacks(watchdog)
+                    mainHandler.removeCallbacks(postStartWatchdog)
                     prefs.edit { putLong(KEY_LAST_SHOWN_AT, System.currentTimeMillis()) }
                     preload(activity)
                 }
