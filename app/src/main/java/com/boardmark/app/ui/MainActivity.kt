@@ -22,9 +22,6 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // GDPR対象地域(EEA/UK/スイス)でのみ同意フォームを表示し、広告リクエスト可能と
-        // 判定された場合にMobileAds/Unity Adsを初期化する(プロセス内で一度だけ実行)。
-        ConsentManager.initializeAdsIfNeeded(this)
         enableEdgeToEdge()
         setContent {
             BoardmarkTheme {
@@ -56,5 +53,13 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        // enableEdgeToEdge()/setContent()がこのWindowのdecor(android.R.id.content)を
+        // 完全に構築し終えた後で呼ぶこと。先に呼ぶと、GDPR同意情報取得(UMP SDK)が
+        // 別スレッドから同じActivityのWindow.getDecorView()に触れることがあり、メイン
+        // スレッドが行うinstallDecor()(PhoneWindowの内部状態はスレッドセーフではない)
+        // と競合してdecorの構築が壊れ、起動直後に極めて発生しやすい確率でクラッシュしていた
+        // (NullPointerException in ComponentActivityKt.setContent /
+        // "Window couldn't find content container view")。
+        ConsentManager.initializeAdsIfNeeded(this)
     }
 }
