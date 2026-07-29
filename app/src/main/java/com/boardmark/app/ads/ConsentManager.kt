@@ -66,6 +66,9 @@ object ConsentManager {
         // 同意フローの結果request可能と判定された時点のみ初期化する(簡易方式。
         // TCF文字列の自前パースによる厳密な承諾/拒否の弁別は行わない)。
         UnityAdsManager.initialize(appContext, gdprConsent = true)
+        // ネイティブ広告フォールバック用のUnity LevelPlay SDK。旧Unity Ads SDKとは
+        // 別モジュール・別クレデンシャルのため独立して初期化する。
+        UnityLevelPlayManager.initialize(appContext, gdprConsent = true)
     }
 
     fun isPrivacyOptionsRequired(context: Context): Boolean =
@@ -80,6 +83,7 @@ object ConsentManager {
             }
             val canRequestAds = UserMessagingPlatform.getConsentInformation(activity).canRequestAds()
             UnityAdsManager.updateGdprConsent(activity.applicationContext, canRequestAds)
+            UnityLevelPlayManager.updateGdprConsent(canRequestAds)
         }
     }
 }

@@ -15,6 +15,7 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import com.boardmark.app.ads.InterstitialAdManager
 import com.boardmark.app.ads.NativeAdManager
+import com.boardmark.app.ads.UnityNativeAdManager
 import com.boardmark.app.ui.MainActivity
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -65,12 +66,17 @@ class BoardmarkApplication :
     // 表示されないまま古い広告が期限切れになって以後読み込まれなくなることを防ぐ。
     // ネイティブ広告も、この「アプリを開き直す」という自然な区切りでだけ更新する
     // (NativeAdManager側に別途クールダウンがあり、短時間の連続起動では読み込み直さない)。
+    // ネイティブ広告はbanner/interstitialと違い1画面に1枠しか出せない制約が無く、
+    // 一覧内の複数枠に同時に混ぜて表示できるため、AdMob(NativeAdManager)とUnity
+    // (UnityNativeAdManager)を「フォールバック」ではなく独立した2つの広告在庫として
+    // 常に両方読み込む(表示件数・収益を最大化する狙い)。
     // 全画面広告の実際の表示は、まだウィンドウがフォーカスを持たないこの時点では行わず、
     // 次にActivityがonResumeするタイミングまで遅らせる(onActivityResumed参照)。
     override fun onStart(owner: LifecycleOwner) {
         InterstitialAdManager.preload(this)
         pendingAppOpenShow = true
         NativeAdManager.preload(this)
+        UnityNativeAdManager.preload(this)
     }
 
     override fun onActivityStarted(activity: Activity) = Unit

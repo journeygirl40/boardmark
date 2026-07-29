@@ -134,6 +134,9 @@ import com.boardmark.app.ads.AdFreeAccess
 import com.boardmark.app.ads.BannerAd
 import com.boardmark.app.ads.InterstitialAdManager
 import com.boardmark.app.ads.NativeAdManager
+import com.boardmark.app.ads.UnityNativeAdManager
+import com.google.android.gms.ads.nativead.NativeAd
+import com.ironsource.mediationsdk.ads.nativead.LevelPlayNativeAd
 import com.boardmark.app.domain.model.Bookmark
 import com.boardmark.app.domain.model.FolderPasswordUpdate
 import com.boardmark.app.domain.model.Label
@@ -150,6 +153,7 @@ import com.boardmark.app.ui.components.GridVerticalSpacing
 import com.boardmark.app.ui.components.MilestoneCelebration
 import com.boardmark.app.ui.components.FolderTile
 import com.boardmark.app.ui.components.NativeAdCard
+import com.boardmark.app.ui.components.UnityNativeAdCard
 import com.boardmark.app.ui.components.MoveToFolderDialog
 import com.boardmark.app.ui.components.NewFolderDialog
 import com.boardmark.app.ui.components.RenameBookmarkDialog
@@ -172,10 +176,20 @@ import kotlin.math.roundToInt
 // ネイティブ広告の挿入間隔。最初の広告は先頭からNativeAdFirstIndex件目に挿入し、
 // 以降はNativeAdRepeatInterval件おきに(一覧が長い場合のみ)繰り返し挿入する。
 // パーソナルなブックマーク管理という性質上、コンテンツフィード的なアプリより
-// 控えめな頻度・上限にしている。挿入枚数はNativeAdManagerが保持する広告の
-// 在庫(NATIVE_AD_POOL_SIZE)を超えない。
+// 控えめな頻度・上限にしている。挿入枚数はeffectiveNativeAds(AdMob+Unityの合算)の
+// 件数を超えない。
 private const val NativeAdFirstIndex = 4
 private const val NativeAdRepeatInterval = 8
+
+// ネイティブ広告はbanner/interstitialと違い1画面に1枠という制約が無く、一覧内の
+// 複数枠に混ぜて表示できる。そのため「AdMob優先・Unityは完全に埋まらなかった場合のみ」
+// ではなく、AdMob(NativeAdManager)・Unity(UnityNativeAdManager)どちらも独立した広告
+// 在庫として合算し、表示できる広告の総数(=広告収益)を最大化する。挿入位置の計算と
+// レンダリングの両方でどちらの広告か区別できるよう、表示層専用にラップする。
+private sealed interface DisplayNativeAd {
+    data class AdMob(val ad: NativeAd) : DisplayNativeAd
+    data class Unity(val ad: LevelPlayNativeAd) : DisplayNativeAd
+}
 
 private data class FolderTarget(val id: Long, val name: String)
 
@@ -710,15 +724,20 @@ fun BookmarkListScreen(
                 // (広告だけが目立ってしまうため)。一覧が長いほどNativeAdRepeatInterval
                 // 件おきに繰り返し挿入するが、広告の在庫(nativeAds)を超えては挿入しない。
                 val nativeAds by NativeAdManager.nativeAds.collectAsState()
+                val unityNativeAds by UnityNativeAdManager.nativeAds.collectAsState()
+                // AdMob・Unity両方の広告在庫を合算し、表示できる広告の総数を最大化する。
+                val effectiveNativeAds = remember(nativeAds, unityNativeAds) {
+                    nativeAds.map { DisplayNativeAd.AdMob(it) } + unityNativeAds.map { DisplayNativeAd.Unity(it) }
+                }
                 var isAdFree by remember { mutableStateOf(AdFreeAccess.isAdFree(context)) }
-                val displayItems = remember(uiState.gridItems, nativeAds, isAdFree, uiState.currentFolderId) {
-                    if (isAdFree || nativeAds.isEmpty() || uiState.currentFolderId != null ||
+                val displayItems = remember(uiState.gridItems, effectiveNativeAds, isAdFree, uiState.currentFolderId) {
+                    if (isAdFree || effectiveNativeAds.isEmpty() || uiState.currentFolderId != null ||
                         uiState.gridItems.size < NativeAdFirstIndex
                     ) {
                         uiState.gridItems
                     } else {
                         uiState.gridItems.toMutableList().apply {
-                            for (slot in nativeAds.indices) {
+                            for (slot in effectiveNativeAds.indices) {
                                 val originalIndex = NativeAdFirstIndex + slot * NativeAdRepeatInterval
                                 if (originalIndex > uiState.gridItems.size) break
                                 add(originalIndex + slot, BookmarkGridItem.NativeAdItem(slot))
@@ -933,8 +952,12 @@ fun BookmarkListScreen(
                                 )
                             }
                             is BookmarkGridItem.NativeAdItem -> {
-                                nativeAds.getOrNull(item.slotIndex)?.let { ad ->
-                                    NativeAdCard(nativeAd = ad, modifier = Modifier.animateItem())
+                                when (val displayAd = effectiveNativeAds.getOrNull(item.slotIndex)) {
+                                    is DisplayNativeAd.AdMob ->
+                                        NativeAdCard(nativeAd = displayAd.ad, modifier = Modifier.animateItem())
+                                    is DisplayNativeAd.Unity ->
+                                        UnityNativeAdCard(nativeAd = displayAd.ad, modifier = Modifier.animateItem())
+                                    null -> Unit
                                 }
                             }
                         }

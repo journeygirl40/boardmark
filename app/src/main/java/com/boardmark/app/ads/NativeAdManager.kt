@@ -69,6 +69,8 @@ object NativeAdManager {
                 object : AdListener() {
                     override fun onAdFailedToLoad(error: LoadAdError) {
                         // 一部だけ埋まらなくても、読み込めた分だけで表示を続ける。
+                        // Unity側(UnityNativeAdManager)は「フォールバック」ではなく独立した
+                        // 広告在庫として常に別途読み込まれるため、ここでは関知しない。
                         isLoading = false
                     }
                 },

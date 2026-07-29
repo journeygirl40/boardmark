@@ -20,31 +20,15 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import com.boardmark.app.R
-import com.google.android.gms.ads.nativead.MediaView
-import com.google.android.gms.ads.nativead.NativeAd
-import com.google.android.gms.ads.nativead.NativeAdView
+import com.ironsource.mediationsdk.ads.nativead.LevelPlayMediaView
+import com.ironsource.mediationsdk.ads.nativead.LevelPlayNativeAd
+import com.ironsource.mediationsdk.ads.nativead.NativeAdLayout
 
-// ネイティブ広告の各アセット(見出し・本文・CTAなど)は、AdMob SDKがクリック計測のために
-// 実View(classic Android View)として登録する必要がある。Composeのテキストは個別の
-// Viewとして参照できないため、このカードだけは純粋なAndroid Viewで組み立て、
-// AndroidView 1つとしてグリッドに埋め込む(見た目だけBookmarkCard/FolderTileに揃える)。
+// AdMob版(NativeAdCard.kt)と全く同じ理由・同じ見た目にするため、レイアウトの組み立て方も
+// そちらを踏襲する。dpToPx/AspectRatioFrameLayoutはNativeAdCard.ktのものをそのまま使う。
 
-internal fun Context.dpToPx(dp: Float): Int =
-    TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, resources.displayMetrics).toInt()
-
-// 横幅に応じてサムネイル比率(CardThumbnailAspectRatio)を維持するためだけの入れ物。
-// ConstraintLayoutへの依存を増やさずに済ませるため、onMeasureで高さを算出する。
-// UnityNativeAdCard.ktからも同じ理由で再利用する。
-internal class AspectRatioFrameLayout(context: Context, private val ratio: Float) : FrameLayout(context) {
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val width = MeasureSpec.getSize(widthMeasureSpec)
-        val height = (width / ratio).toInt()
-        super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY))
-    }
-}
-
-private class NativeAdViewHolder(
-    val root: NativeAdView,
+private class UnityNativeAdViewHolder(
+    val root: NativeAdLayout,
     val mediaFrame: AspectRatioFrameLayout,
     val badgeText: TextView,
     val headlineView: TextView,
@@ -52,9 +36,9 @@ private class NativeAdViewHolder(
     val ctaView: TextView,
 )
 
-private fun buildNativeAdView(context: Context, adBadgeLabel: String): NativeAdViewHolder {
+private fun buildUnityNativeAdView(context: Context, adBadgeLabel: String): UnityNativeAdViewHolder {
     val cornerRadiusPx = context.dpToPx(12f).toFloat()
-    val mediaView = MediaView(context)
+    val mediaView = LevelPlayMediaView(context)
     val mediaFrame = AspectRatioFrameLayout(context, CardThumbnailAspectRatio).apply {
         outlineProvider = ViewOutlineProvider.BACKGROUND
         clipToOutline = true
@@ -91,8 +75,6 @@ private fun buildNativeAdView(context: Context, adBadgeLabel: String): NativeAdV
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
     }
-    // 「Ad」バッジと同じ見た目(色)にした上で、大きさ(文字サイズ・余白・角丸)も
-    // 揃えることで、広告に付随する表示だと一貫して伝わるようにする。
     val ctaView = TextView(context).apply {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
         setPadding(context.dpToPx(6f), context.dpToPx(2f), context.dpToPx(6f), context.dpToPx(2f))
@@ -127,25 +109,22 @@ private fun buildNativeAdView(context: Context, adBadgeLabel: String): NativeAdV
         )
     }
 
-    val nativeAdView = NativeAdView(context).apply {
+    val nativeAdLayout = NativeAdLayout(context).apply {
         addView(column, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        this.mediaView = mediaView
-        this.headlineView = headlineView
-        this.bodyView = bodyView
-        this.callToActionView = ctaView
+        setMediaView(mediaView)
+        setTitleView(headlineView)
+        setBodyView(bodyView)
+        setCallToActionView(ctaView)
     }
 
-    return NativeAdViewHolder(nativeAdView, mediaFrame, badgeText, headlineView, bodyView, ctaView)
+    return UnityNativeAdViewHolder(nativeAdLayout, mediaFrame, badgeText, headlineView, bodyView, ctaView)
 }
 
 @Composable
-fun NativeAdCard(nativeAd: NativeAd, modifier: Modifier = Modifier) {
+fun UnityNativeAdCard(nativeAd: LevelPlayNativeAd, modifier: Modifier = Modifier) {
     val adBadgeLabel = stringResource(R.string.native_ad_badge)
     val titleColor = MaterialTheme.colorScheme.onSurface.toArgb()
     val bodyColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
-    // ユーザーが付けるラベルタグ(secondaryContainerの彩度の高いピル)と見分けが
-    // つくよう、広告バッジ・CTAボタンは同じ「黒スクリム+白文字」で統一する。
-    // 見た目を揃えることで、どちらも広告に付随する要素だと一目で分かるようにする。
     val badgeBg = Color.Black.copy(alpha = 0.55f).toArgb()
     val badgeFg = Color.White.toArgb()
     val ctaBg = badgeBg
@@ -155,12 +134,12 @@ fun NativeAdCard(nativeAd: NativeAd, modifier: Modifier = Modifier) {
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            val holder = buildNativeAdView(ctx, adBadgeLabel)
+            val holder = buildUnityNativeAdView(ctx, adBadgeLabel)
             holder.root.tag = holder
             holder.root
         },
         update = { view ->
-            val holder = view.tag as NativeAdViewHolder
+            val holder = view.tag as UnityNativeAdViewHolder
 
             holder.headlineView.setTextColor(titleColor)
             holder.bodyView.setTextColor(bodyColor)
@@ -170,7 +149,7 @@ fun NativeAdCard(nativeAd: NativeAd, modifier: Modifier = Modifier) {
             (holder.ctaView.background as? GradientDrawable)?.setColor(ctaBg)
             (holder.mediaFrame.background as? GradientDrawable)?.setColor(placeholderBg)
 
-            holder.headlineView.text = nativeAd.headline
+            holder.headlineView.text = nativeAd.title
             val bodyText = nativeAd.body ?: nativeAd.advertiser
             holder.bodyView.text = bodyText
             holder.bodyView.visibility = if (bodyText.isNullOrBlank()) View.GONE else View.VISIBLE
@@ -178,7 +157,7 @@ fun NativeAdCard(nativeAd: NativeAd, modifier: Modifier = Modifier) {
             holder.ctaView.text = ctaText
             holder.ctaView.visibility = if (ctaText.isNullOrBlank()) View.GONE else View.VISIBLE
 
-            holder.root.setNativeAd(nativeAd)
+            holder.root.registerNativeAdViews(nativeAd)
         },
     )
 }
