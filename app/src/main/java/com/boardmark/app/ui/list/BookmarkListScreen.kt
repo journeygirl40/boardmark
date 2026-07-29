@@ -121,6 +121,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -139,9 +140,13 @@ import com.boardmark.app.domain.model.Label
 import com.boardmark.app.ui.components.BookmarkCard
 import com.boardmark.app.ui.components.BookmarkGridSkeleton
 import com.boardmark.app.ui.components.BrowserPickerDialog
+import com.boardmark.app.ui.components.CardThumbnailAspectRatio
 import com.boardmark.app.ui.components.DuplicateResolutionDialog
 import com.boardmark.app.ui.components.EmptyBookmarksState
 import com.boardmark.app.ui.components.FolderUnlockDialog
+import com.boardmark.app.ui.components.GridContentPadding
+import com.boardmark.app.ui.components.GridHorizontalSpacing
+import com.boardmark.app.ui.components.GridVerticalSpacing
 import com.boardmark.app.ui.components.MilestoneCelebration
 import com.boardmark.app.ui.components.FolderTile
 import com.boardmark.app.ui.components.NativeAdCard
@@ -670,8 +675,22 @@ fun BookmarkListScreen(
             snackbarHost = { SnackbarHost(snackbarHostState) },
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val gridState = rememberLazyGridState()
             val columnCount = thumbnailColumnsForLevel(uiState.thumbnailSizeLevel)
+            // カード1枚あたりの実ピクセル幅をここで計算し、AsyncImageの取得サイズに直接渡す。
+            // Constraints頼みの自動サイズ解決だと、起動直後のようにレイアウトがまだ確定
+            // しきっていないタイミングで小さいサイズのままデコード・キャッシュされてしまい、
+            // 後から正しいサイズに確定してもその粗いビットマップが再利用され続けてしまう
+            // (画面外に出して戻す=作り直されるまで荒いまま)ことがあったため。
+            val density = LocalDensity.current
+            val thumbnailPixelSize = remember(maxWidth, columnCount, density) {
+                val cardWidthDp = (maxWidth - GridContentPadding * 2 - GridHorizontalSpacing * (columnCount - 1)) /
+                    columnCount
+                val widthPx = with(density) { cardWidthDp.roundToPx() }.coerceAtLeast(1)
+                val heightPx = (widthPx / CardThumbnailAspectRatio).roundToInt().coerceAtLeast(1)
+                IntSize(widthPx, heightPx)
+            }
 
             if (uiState.isLoading) {
                 BookmarkGridSkeleton(columns = columnCount, modifier = Modifier.fillMaxSize())
@@ -718,9 +737,9 @@ fun BookmarkListScreen(
                     // StaggeredGridではなく通常のGridを使うことで、カードの高さが
                     // 揃っていない場合でも必ずZ字(行優先)の並び順になる。
                     columns = GridCells.Fixed(columnCount),
-                    contentPadding = PaddingValues(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(GridContentPadding),
+                    horizontalArrangement = Arrangement.spacedBy(GridHorizontalSpacing),
+                    verticalArrangement = Arrangement.spacedBy(GridVerticalSpacing),
                     modifier = Modifier
                         .fillMaxSize()
                         .clearFocusOnTap()
@@ -879,6 +898,7 @@ fun BookmarkListScreen(
                             is BookmarkGridItem.FolderItem -> FolderTile(
                                 data = item.data,
                                 isSelected = item.data.folder.id == selectedFolder?.id,
+                                thumbnailPixelSize = thumbnailPixelSize,
                                 // 検索/ラベル絞り込みの切り替わりで一覧が入れ替わる様子自体を
                                 // 「フィルタされている」ことの表現として使うため、出現・消失・
                                 // 並び替えをアニメーションさせる。
@@ -894,6 +914,7 @@ fun BookmarkListScreen(
                                     selectionMode = uiState.isSelectionMode,
                                     isDragActive = drag != null,
                                     isDropTarget = isDropTarget,
+                                    thumbnailPixelSize = thumbnailPixelSize,
                                     // ドラッグ中のカードだけ独自レイヤーに載せて動かす。全カードに常時
                                     // graphicsLayerを適用するとスクロール中も余分な合成コストがかかるため、
                                     // 実際に動かす必要があるとき(drag != null)だけ付与する。
@@ -962,6 +983,7 @@ fun BookmarkListScreen(
                         )
                     }
                 }
+            }
             }
             }
         }

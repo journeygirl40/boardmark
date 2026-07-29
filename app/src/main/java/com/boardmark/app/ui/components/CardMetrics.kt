@@ -8,3 +8,12 @@ import androidx.compose.ui.unit.dp
  */
 internal const val CardThumbnailAspectRatio = 1.4f
 internal val CardMetaRowHeight = 26.dp
+
+/**
+ * グリッドの余白・列間隔。カード1枚あたりの実ピクセル幅を計算する際にも
+ * LazyVerticalGridのcontentPadding/horizontalArrangementと同じ値を使う必要があるため、
+ * ここに集約して両者のずれを防ぐ。
+ */
+internal val GridContentPadding = 12.dp
+internal val GridHorizontalSpacing = 12.dp
+internal val GridVerticalSpacing = 16.dp

@@ -30,10 +30,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import com.boardmark.app.R
 import com.boardmark.app.domain.model.FolderWithPreview
 import com.boardmark.app.util.domainOf
@@ -51,10 +54,18 @@ private fun accentColorForFolder(folderId: Long): Color =
 @Composable
 fun FolderTile(
     data: FolderWithPreview,
+    thumbnailPixelSize: IntSize,
     isSelected: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val accentColor = accentColorForFolder(data.folder.id)
+    // プレビューは2x2のコラージュなので、1マスはカード全体の半分のピクセルサイズになる。
+    val previewPixelSize = remember(thumbnailPixelSize) {
+        IntSize(
+            (thumbnailPixelSize.width / 2).coerceAtLeast(1),
+            (thumbnailPixelSize.height / 2).coerceAtLeast(1),
+        )
+    }
 
     // 選択された瞬間だけ軽くバウンドさせ、タップの手応えを演出する。
     val scale = remember { Animatable(1f) }
@@ -83,8 +94,15 @@ fun FolderTile(
                                 if (bookmark != null) {
                                     val imageUrl = bookmark.ogImageUrl ?: bookmark.faviconUrl
                                     if (imageUrl != null) {
+                                        val context = LocalContext.current
+                                        val imageRequest = remember(imageUrl, previewPixelSize) {
+                                            ImageRequest.Builder(context)
+                                                .data(imageUrl)
+                                                .size(previewPixelSize.width, previewPixelSize.height)
+                                                .build()
+                                        }
                                         AsyncImage(
-                                            model = imageUrl,
+                                            model = imageRequest,
                                             contentDescription = null,
                                             contentScale = ContentScale.Crop,
                                             modifier = Modifier.fillMaxSize(),

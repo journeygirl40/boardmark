@@ -192,8 +192,12 @@ fun SettingsScreen(
                         if (isAdFree) {
                             stringResource(R.string.remove_ads_purchased)
                         } else {
-                            adFreeProductDetails?.oneTimePurchaseOfferDetails?.formattedPrice
-                                ?: stringResource(R.string.remove_ads_price_fallback)
+                            val formattedPrice = adFreeProductDetails?.oneTimePurchaseOfferDetails?.formattedPrice
+                            if (formattedPrice != null) {
+                                stringResource(R.string.remove_ads_price_format, formattedPrice)
+                            } else {
+                                stringResource(R.string.remove_ads_price_fallback)
+                            }
                         },
                     )
                 },

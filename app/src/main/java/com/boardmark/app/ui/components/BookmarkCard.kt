@@ -35,9 +35,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import com.boardmark.app.domain.model.Bookmark
 import com.boardmark.app.domain.model.FetchStatus
 import com.boardmark.app.util.domainOf
@@ -47,6 +50,7 @@ fun BookmarkCard(
     bookmark: Bookmark,
     isSelected: Boolean,
     selectionMode: Boolean,
+    thumbnailPixelSize: IntSize,
     isDragActive: Boolean = false,
     isDropTarget: Boolean = false,
     modifier: Modifier = Modifier,
@@ -98,8 +102,19 @@ fun BookmarkCard(
                 FetchStatus.SUCCESS, FetchStatus.FAILED -> {
                     val imageUrl = bookmark.ogImageUrl ?: bookmark.faviconUrl
                     if (imageUrl != null) {
+                        val context = LocalContext.current
+                        // サイズをConstraintsからの自動解決に任せず、実際にカードが表示される
+                        // ピクセルサイズを明示する。自動解決だと起動直後などレイアウトが確定
+                        // しきる前に小さいサイズでデコード・キャッシュされ、後でレイアウトが
+                        // 確定しても粗いビットマップのまま表示され続けることがあったため。
+                        val imageRequest = remember(imageUrl, thumbnailPixelSize) {
+                            ImageRequest.Builder(context)
+                                .data(imageUrl)
+                                .size(thumbnailPixelSize.width, thumbnailPixelSize.height)
+                                .build()
+                        }
                         AsyncImage(
-                            model = imageUrl,
+                            model = imageRequest,
                             contentDescription = bookmark.title,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxWidth().aspectRatio(CardThumbnailAspectRatio),
