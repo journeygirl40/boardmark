@@ -11,15 +11,24 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.boardmark.app.ads.ConsentManager
+import com.boardmark.app.billing.BillingManager
 import com.boardmark.app.ui.list.BookmarkListScreen
 import com.boardmark.app.ui.list.BookmarkListViewModel
 import com.boardmark.app.ui.settings.HelpScreen
 import com.boardmark.app.ui.settings.SettingsScreen
 import com.boardmark.app.ui.theme.BoardmarkTheme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
+
+    // 参照はしないが、フィールド注入させるだけでHiltがSingletonを起動時に生成し、
+    // Billing接続・商品情報取得(非同期)をこの時点で開始させるために宣言している。
+    // 設定画面を開いたタイミングで初めて生成されると、フォールバック価格表示から
+    // 実際の価格への差し替わりでレイアウトが一瞬ずれて見えるため、それより前倒しする。
+    @Inject lateinit var billingManager: BillingManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
