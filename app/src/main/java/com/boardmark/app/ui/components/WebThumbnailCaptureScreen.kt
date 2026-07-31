@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.boardmark.app.R
 import kotlin.coroutines.resume
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 
@@ -58,12 +59,60 @@ private const val MIN_SELECTION_PX = 20f
 private val HANDLE_TOUCH_RADIUS = 24.dp
 private val HANDLE_DRAW_RADIUS = 6.dp
 
-private fun rectFromAnchor(anchor: Offset, point: Offset) = Rect(
-    left = minOf(anchor.x, point.x),
-    top = minOf(anchor.y, point.y),
-    right = maxOf(anchor.x, point.x),
-    bottom = maxOf(anchor.y, point.y),
-)
+/**
+ * 選択範囲は一覧のサムネイル表示(ContentScale.Crop、CardThumbnailAspectRatio)と
+ * 縦横比を揃えておかないと、キャプチャ時に見えていた構図と一覧での見た目がずれるため固定する。
+ * 大きさ自体はユーザーがハンドルドラッグで自由に変えられるようにする。
+ */
+private const val SELECTION_ASPECT_RATIO = CardThumbnailAspectRatio
+
+/**
+ * anchor(固定側の角)からpoint(ドラッグ中の角)に向けて、SELECTION_ASPECT_RATIOを保ったまま
+ * 矩形を組み立てる。両軸のうちドラッグ量が縦横比に対して大きい方を基準に、もう片方の辺を
+ * 逆算することで、指の動きに素直に追従しつつ比率を崩さない。
+ */
+private fun rectFromAnchorWithRatio(
+    anchor: Offset,
+    point: Offset,
+    maxWidth: Float,
+    maxHeight: Float,
+): Rect {
+    val dx = point.x - anchor.x
+    val dy = point.y - anchor.y
+    val rawWidth = abs(dx)
+    val rawHeight = abs(dy)
+
+    var width: Float
+    var height: Float
+    if (rawHeight <= 0f || rawWidth / rawHeight > SELECTION_ASPECT_RATIO) {
+        width = rawWidth.coerceAtLeast(1f)
+        height = width / SELECTION_ASPECT_RATIO
+    } else {
+        height = rawHeight.coerceAtLeast(1f)
+        width = height * SELECTION_ASPECT_RATIO
+    }
+
+    val maxWidthAvailable = if (dx >= 0) maxWidth - anchor.x else anchor.x
+    val maxHeightAvailable = if (dy >= 0) maxHeight - anchor.y else anchor.y
+    if (width > maxWidthAvailable) {
+        width = maxWidthAvailable
+        height = width / SELECTION_ASPECT_RATIO
+    }
+    if (height > maxHeightAvailable) {
+        height = maxHeightAvailable
+        width = height * SELECTION_ASPECT_RATIO
+    }
+
+    val signX = if (dx >= 0) 1f else -1f
+    val signY = if (dy >= 0) 1f else -1f
+    val corner = Offset(anchor.x + signX * width, anchor.y + signY * height)
+    return Rect(
+        left = minOf(anchor.x, corner.x),
+        top = minOf(anchor.y, corner.y),
+        right = maxOf(anchor.x, corner.x),
+        bottom = maxOf(anchor.y, corner.y),
+    )
+}
 
 /**
  * 対象URLの実際の描画結果をWebViewで表示し、ユーザーがドラッグで選んだ矩形を
@@ -230,11 +279,7 @@ fun WebThumbnailCaptureScreen(
                                             current.translate(translateX, translateY)
                                         }
                                     } else {
-                                        val point = Offset(
-                                            change.position.x.coerceIn(0f, maxWidth),
-                                            change.position.y.coerceIn(0f, maxHeight),
-                                        )
-                                        rectFromAnchor(anchor, point)
+                                        rectFromAnchorWithRatio(anchor, change.position, maxWidth, maxHeight)
                                     }
                                 },
                             )
@@ -280,14 +325,19 @@ fun WebThumbnailCaptureScreen(
 
 private suspend fun captureWebView(context: Context, webView: WebView): Bitmap? {
     val activity = context.findActivity() ?: return null
-    val bitmap = Bitmap.createBitmap(webView.width, webView.height, Bitmap.Config.ARGB_8888)
+    // PixelCopyは幅か高さが奇数だと、GPUバッファのアライメント都合で下端または右端に
+    // 未初期化データ(緑がかった線)が写り込むことがあるため、偶数に切り詰めて渡す。
+    val width = webView.width - (webView.width % 2)
+    val height = webView.height - (webView.height % 2)
+    if (width <= 0 || height <= 0) return null
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val location = IntArray(2)
     webView.getLocationInWindow(location)
     val srcRect = android.graphics.Rect(
         location[0],
         location[1],
-        location[0] + webView.width,
-        location[1] + webView.height,
+        location[0] + width,
+        location[1] + height,
     )
     return suspendCancellableCoroutine { continuation ->
         PixelCopy.request(

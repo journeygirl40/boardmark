@@ -23,9 +23,8 @@ object LocalImageStore {
     fun saveToInternalStorage(context: Context, sourceUri: Uri): String? {
         return try {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            context.contentResolver.openInputStream(sourceUri)?.use { input ->
-                BitmapFactory.decodeStream(input, null, bounds)
-            } ?: return null
+            val boundsStream = context.contentResolver.openInputStream(sourceUri) ?: return null
+            boundsStream.use { input -> BitmapFactory.decodeStream(input, null, bounds) }
 
             val sampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight)
             val bitmap = context.contentResolver.openInputStream(sourceUri)?.use { input ->
@@ -43,7 +42,10 @@ object LocalImageStore {
             val scaled = downscaleIfNeeded(bitmap)
             val dir = File(context.filesDir, "thumbnails").apply { mkdirs() }
             val file = File(dir, "${UUID.randomUUID()}.jpg")
-            file.outputStream().use { output -> scaled.compress(Bitmap.CompressFormat.JPEG, 90, output) }
+            // ウェブページのキャプチャは文字やアイコンの輪郭が多く、JPEGのブロックノイズや
+            // リンギングが写真よりずっと目立つ。保存サイズは長辺1080pxまでに抑えているため
+            // 品質を上げても容量への影響は小さく、綺麗さを優先して最高品質で保存する。
+            file.outputStream().use { output -> scaled.compress(Bitmap.CompressFormat.JPEG, 100, output) }
             file.toURI().toString()
         } catch (e: IOException) {
             null
