@@ -168,4 +168,29 @@ class OgpFetcherTest {
             candidates,
         )
     }
+
+    @Test
+    fun `excludes icons, tiny images and tracking pixels from img tag fallback`() = runTest {
+        val baseUrl = server.url("/").toString().removeSuffix("/")
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                <html><body>
+                <img src="$baseUrl/content-photo.jpg" width="600" height="400" />
+                <img src="$baseUrl/site-logo.png" />
+                <img src="$baseUrl/nav-icon.png" width="600" height="400" />
+                <img src="$baseUrl/small.jpg" width="40" height="40" />
+                <img src="$baseUrl/vector.svg" width="600" height="400" />
+                <img src="data:image/png;base64,iVBORw0KGgo=" width="600" height="400" />
+                <img src="https://googlesyndication.com/ad.jpg" width="600" height="400" />
+                <img src="$baseUrl/avatar-class.jpg" class="user-avatar" width="600" height="400" />
+                </body></html>
+                """.trimIndent()
+            )
+        )
+
+        val candidates = fetcher.fetchCandidateImages(server.url("/article").toString())
+
+        assertEquals(listOf("$baseUrl/content-photo.jpg"), candidates)
+    }
 }

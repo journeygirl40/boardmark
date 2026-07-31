@@ -8,11 +8,24 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 
 private const val MOBILE_USER_AGENT =
     "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
 private const val MAX_CANDIDATE_IMAGES = 24
+
+// <img>タグ全件フォールバックで拾ってしまう、明らかにサムネイルではない画像を弾くための
+// 判定材料。og:image等サイト側が明示指定したソースはこの対象にしない(誤検知の方が実害が大きいため)。
+private const val MIN_CANDIDATE_DIMENSION_PX = 100
+private val EXCLUDED_URL_KEYWORDS = listOf(
+    "icon", "logo", "sprite", "avatar", "favicon", "spacer", "placeholder",
+    "pixel", "badge", "loading", "tracking", "beacon", "1x1",
+)
+private val EXCLUDED_DOMAINS = listOf(
+    "doubleclick.net", "googlesyndication.com", "google-analytics.com",
+    "googletagmanager.com", "facebook.com/tr", "scorecardresearch.com",
+)
 
 class OgpFetcher @Inject constructor(private val client: OkHttpClient) {
 
@@ -93,14 +106,42 @@ class OgpFetcher @Inject constructor(private val client: OkHttpClient) {
                         .forEach { match -> candidates.add(match.groupValues[1]) }
                 }
 
-                doc.select("img[src]")
-                    .forEach { el -> el.attr("abs:src").ifBlank { null }?.let(candidates::add) }
+                doc.select("img[src]").forEach { el ->
+                    val src = el.attr("abs:src")
+                    if (src.isNotBlank() && !isLikelyDecorativeImage(src, el)) {
+                        candidates.add(src)
+                    }
+                }
 
                 candidates.take(MAX_CANDIDATE_IMAGES).toList()
             }
         } catch (e: IOException) {
             emptyList()
         }
+    }
+
+    /**
+     * <img>全件フォールバックにのみ適用する除外判定。ロゴ・アイコン・広告/計測用の
+     * 極小画像など、明らかに本文サムネイルではないものだけを弾く保守的な判定にとどめ、
+     * 判断がつかないものは誤って除外しないようにする。
+     */
+    private fun isLikelyDecorativeImage(url: String, el: Element): Boolean {
+        if (url.startsWith("data:")) return true
+        val lower = url.substringBefore('?').lowercase()
+        if (lower.endsWith(".svg")) return true
+        if (EXCLUDED_DOMAINS.any { lower.contains(it) }) return true
+        if (EXCLUDED_URL_KEYWORDS.any { lower.contains(it) }) return true
+
+        val width = el.attr("width").toIntOrNull()
+        val height = el.attr("height").toIntOrNull()
+        if ((width != null && width < MIN_CANDIDATE_DIMENSION_PX) ||
+            (height != null && height < MIN_CANDIDATE_DIMENSION_PX)
+        ) {
+            return true
+        }
+
+        val classAndId = "${el.className()} ${el.id()}".lowercase()
+        return EXCLUDED_URL_KEYWORDS.any { classAndId.contains(it) }
     }
 
     private companion object {
