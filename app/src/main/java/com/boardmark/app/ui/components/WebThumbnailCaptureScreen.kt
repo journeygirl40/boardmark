@@ -43,6 +43,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -128,6 +130,8 @@ fun WebThumbnailCaptureScreen(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
+    val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
 
     var mode by remember { mutableStateOf(CaptureMode.BROWSE) }
@@ -190,16 +194,29 @@ fun WebThumbnailCaptureScreen(
                                 val rect = selection
                                 if (wv != null && rect != null) {
                                     coroutineScope.launch {
-                                        // 選択枠・ハンドルを消してから、その変更が実際に
-                                        // ウィンドウへ描画されるのを待たないと、PixelCopyに
-                                        // 古いフレーム(オーバーレイ入り)が写り込んでしまう。
+                                        // 選択枠・ハンドルを消してから撮る(ベストエフォート)。
+                                        // ただしWebViewの描画はChromium側の非同期コンポジタが
+                                        // 担っており、Compose側のフレームコミットとは別スケジュール
+                                        // で動くため、どれだけフレーム待ちをしてもオーバーレイが
+                                        // 消え切る前のフレームをPixelCopyが拾う可能性を完全には
+                                        // 排除できない。そのため実際の安全策は下のinsetSafelyで、
+                                        // ハンドル円(半径HANDLE_DRAW_RADIUS)が選択矩形の内側に
+                                        // 入り込める最大距離ぶんクロップ範囲を内側に縮め、
+                                        // 消し忘れがあっても白い枠線・ハンドルが結果画像に
+                                        // 幾何学的に絶対含まれないようにしている。
                                         isCapturing = true
                                         withFrameNanos {}
-                                        withFrameNanos {}
+                                        suspendCancellableCoroutine<Unit> { cont ->
+                                            view.viewTreeObserver.registerFrameCommitCallback {
+                                                if (cont.isActive) cont.resume(Unit)
+                                            }
+                                            view.invalidate()
+                                        }
                                         val bitmap = captureWebView(context, wv)
                                         isCapturing = false
                                         if (bitmap != null) {
-                                            onCaptured(cropBitmap(bitmap, rect))
+                                            val insetPx = with(density) { HANDLE_DRAW_RADIUS.toPx() }
+                                            onCaptured(cropBitmap(bitmap, rect.insetSafely(insetPx)))
                                         }
                                     }
                                 }
@@ -359,6 +376,24 @@ private suspend fun captureWebView(context: Context, webView: WebView): Bitmap? 
             Handler(Looper.getMainLooper()),
         )
     }
+}
+
+/**
+ * 選択矩形の境界(角・辺)に描いていたオーバーレイのハンドル円・枠線が、非表示化の
+ * タイミング次第でキャプチャに写り込んでも結果画像に含まれないよう、その最大はみ出し幅
+ * (insetにHANDLE_DRAW_RADIUSを渡す)ぶんだけ全周を内側に縮める。円の中心は角そのものに
+ * あるため、半径ぶん内側に寄せれば角からはみ出た円は幾何学的に必ず範囲外になる。
+ * 極端に小さい選択でinsetが矩形を食い尽くさないよう、最大でも幅・高さの半分未満に丸める。
+ */
+private fun Rect.insetSafely(inset: Float): Rect {
+    val maxInset = (minOf(width, height) / 2f - 1f).coerceAtLeast(0f)
+    val clamped = inset.coerceIn(0f, maxInset)
+    return Rect(
+        left = left + clamped,
+        top = top + clamped,
+        right = right - clamped,
+        bottom = bottom - clamped,
+    )
 }
 
 private fun cropBitmap(source: Bitmap, rect: Rect): Bitmap {
