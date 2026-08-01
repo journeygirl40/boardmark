@@ -41,11 +41,12 @@ object LocalImageStore {
         return try {
             val scaled = downscaleIfNeeded(bitmap)
             val dir = File(context.filesDir, "thumbnails").apply { mkdirs() }
-            val file = File(dir, "${UUID.randomUUID()}.jpg")
-            // ウェブページのキャプチャは文字やアイコンの輪郭が多く、JPEGのブロックノイズや
-            // リンギングが写真よりずっと目立つ。保存サイズは長辺1080pxまでに抑えているため
-            // 品質を上げても容量への影響は小さく、綺麗さを優先して最高品質で保存する。
-            file.outputStream().use { output -> scaled.compress(Bitmap.CompressFormat.JPEG, 100, output) }
+            val file = File(dir, "${UUID.randomUUID()}.png")
+            // JPEGは品質を100にしてもエンコーダが常に4:2:0クロマサブサンプリングを
+            // 適用する(公開APIから変更不可)ため、文字やUIのようなシャープな色境界で
+            // 色にじみ・ブロックノイズが残ってしまう。ウェブキャプチャは写真よりそうした
+            // 境界が多いため、非可逆圧縮をやめてロスレスのPNGで保存する。
+            file.outputStream().use { output -> scaled.compress(Bitmap.CompressFormat.PNG, 100, output) }
             file.toURI().toString()
         } catch (e: IOException) {
             null
@@ -53,13 +54,15 @@ object LocalImageStore {
     }
 
     /**
-     * 完全バックアップの復元時に使う。バックアップ内の画像は保存時点で既にJPEGへ
-     * 圧縮・縮小済みのため、再デコード・再エンコードはせずバイト列をそのまま書き出す。
+     * 完全バックアップの復元時に使う。バックアップ内の画像は保存時点で既に圧縮・縮小済み
+     * (PNG、または旧バージョンが書き出したJPEG)のため、再デコード・再エンコードはせず
+     * バイト列をそのまま書き出す。拡張子は実体のフォーマットと一致しなくても、デコード時は
+     * 中身のマジックバイトから判定されるため実害はない。
      */
     fun restoreBytesToInternalStorage(context: Context, bytes: ByteArray): String? {
         return try {
             val dir = File(context.filesDir, "thumbnails").apply { mkdirs() }
-            val file = File(dir, "${UUID.randomUUID()}.jpg")
+            val file = File(dir, "${UUID.randomUUID()}.png")
             file.outputStream().use { output -> output.write(bytes) }
             file.toURI().toString()
         } catch (e: IOException) {

@@ -33,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -133,6 +134,7 @@ fun WebThumbnailCaptureScreen(
     var isLoading by remember { mutableStateOf(true) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var selection by remember { mutableStateOf<Rect?>(null) }
+    var isCapturing by remember { mutableStateOf(false) }
 
     val hasValidSelection = selection?.let {
         it.width > MIN_SELECTION_PX && it.height > MIN_SELECTION_PX
@@ -182,13 +184,20 @@ fun WebThumbnailCaptureScreen(
                         }
                     } else {
                         IconButton(
-                            enabled = hasValidSelection,
+                            enabled = hasValidSelection && !isCapturing,
                             onClick = {
                                 val wv = webView
                                 val rect = selection
                                 if (wv != null && rect != null) {
                                     coroutineScope.launch {
+                                        // 選択枠・ハンドルを消してから、その変更が実際に
+                                        // ウィンドウへ描画されるのを待たないと、PixelCopyに
+                                        // 古いフレーム(オーバーレイ入り)が写り込んでしまう。
+                                        isCapturing = true
+                                        withFrameNanos {}
+                                        withFrameNanos {}
                                         val bitmap = captureWebView(context, wv)
+                                        isCapturing = false
                                         if (bitmap != null) {
                                             onCaptured(cropBitmap(bitmap, rect))
                                         }
@@ -300,15 +309,17 @@ fun WebThumbnailCaptureScreen(
                             topLeft = Offset(rect.right, rect.top),
                             size = Size(size.width - rect.right, rect.height),
                         )
-                        drawRect(
-                            color = Color.White,
-                            topLeft = rect.topLeft,
-                            size = rect.size,
-                            style = Stroke(width = 2.dp.toPx()),
-                        )
-                        val handleRadiusPx = HANDLE_DRAW_RADIUS.toPx()
-                        listOf(rect.topLeft, rect.topRight, rect.bottomLeft, rect.bottomRight).forEach { corner ->
-                            drawCircle(color = Color.White, radius = handleRadiusPx, center = corner)
+                        if (!isCapturing) {
+                            drawRect(
+                                color = Color.White,
+                                topLeft = rect.topLeft,
+                                size = rect.size,
+                                style = Stroke(width = 2.dp.toPx()),
+                            )
+                            val handleRadiusPx = HANDLE_DRAW_RADIUS.toPx()
+                            listOf(rect.topLeft, rect.topRight, rect.bottomLeft, rect.bottomRight).forEach { corner ->
+                                drawCircle(color = Color.White, radius = handleRadiusPx, center = corner)
+                            }
                         }
                     } else {
                         drawRect(color = scrim)
