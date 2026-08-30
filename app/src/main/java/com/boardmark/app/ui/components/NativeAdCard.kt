@@ -34,7 +34,6 @@ internal fun Context.dpToPx(dp: Float): Int =
 
 // 横幅に応じてサムネイル比率(CardThumbnailAspectRatio)を維持するためだけの入れ物。
 // ConstraintLayoutへの依存を増やさずに済ませるため、onMeasureで高さを算出する。
-// UnityNativeAdCard.ktからも同じ理由で再利用する。
 internal class AspectRatioFrameLayout(context: Context, private val ratio: Float) : FrameLayout(context) {
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
