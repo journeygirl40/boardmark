@@ -13,8 +13,11 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
+import com.boardmark.app.ads.AdFreeAccess
+import com.boardmark.app.ads.AppOpenAdManager
 import com.boardmark.app.ads.InterstitialAdManager
 import com.boardmark.app.ads.NativeAdManager
+import com.boardmark.app.ads.RewardedAdManager
 import com.boardmark.app.ui.MainActivity
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -30,12 +33,6 @@ class BoardmarkApplication :
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var okHttpClient: OkHttpClient
-
-    // onStart(ActivityがまだonResume前でウィンドウのフォーカスを持たない可能性がある)の
-    // 時点で即座に全画面広告を出すと、Unity Adsのフルスクリーン表示がホストActivityの
-    // ウィンドウ遷移と競合し、黒画面のまま操作不能になることがある。そのため実際の
-    // maybeShow呼び出しは、Activityが完全にonResumeするタイミングまで遅らせる。
-    private var pendingAppOpenShow = false
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -54,23 +51,30 @@ class BoardmarkApplication :
         super<Application>.onCreate()
         registerActivityLifecycleCallbacks(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
-        // 広告SDK(MobileAds/Unity Ads)の初期化はGDPR同意フォームの表示にActivityが
-        // 必要なため、ここではなくConsentManager経由でMainActivity.onCreateから行う。
+        AdFreeAccess.refresh(this)
+        // 広告SDKの初期化はGDPR同意フォームの表示にActivityが必要なため、ここではなく
+        // ConsentManager経由でMainActivity.onCreateから行う。
     }
 
     // アプリプロセスがフォアグラウンドに来るたび(コールドスタート・他アプリからの復帰いずれも)に呼ばれる。
-    // 実際に表示できるかどうか(確率・クールダウン)の判定はInterstitialAdManager側が行う。
-    // maybeShow自体はクールダウンや確率判定で早期returnすることが多く、その場合は
-    // 広告の期限切れチェックまで到達しないため、ここで毎回明示的にpreloadも呼び、
-    // 表示されないまま古い広告が期限切れになって以後読み込まれなくなることを防ぐ。
-    // ネイティブ広告も、この「アプリを開き直す」という自然な区切りでだけ更新する
-    // (NativeAdManager側に別途クールダウンがあり、短時間の連続起動では読み込み直さない)。
+    // アプリ起動広告を出してよい復帰かどうかの判定はAppOpenAdManager側が行う。
+    // 各フォーマットのpreloadは、表示されないまま古い広告が期限切れになって以後
+    // 読み込まれなくなることを防ぐため、この自然な区切りで毎回呼び直す。
+    // ネイティブ広告は、長時間離れていた場合だけ、画面が描画される前のこの時点で
+    // 全枠を入れ替える(すぐ戻った場合は、見ていた広告をそのまま残す)。
     // 全画面広告の実際の表示は、まだウィンドウがフォーカスを持たないこの時点では行わず、
-    // 次にActivityがonResumeするタイミングまで遅らせる(onActivityResumed参照)。
+    // MainActivityがonResumeするタイミングまで遅らせる(onActivityResumed参照)。
     override fun onStart(owner: LifecycleOwner) {
+        AdFreeAccess.refresh(this)
+        AppOpenAdManager.onAppForegrounded(this)
         InterstitialAdManager.preload(this)
-        pendingAppOpenShow = true
-        NativeAdManager.preload(this)
+        NativeAdManager.onAppForegrounded(this)
+        RewardedAdManager.preload(this)
+    }
+
+    override fun onStop(owner: LifecycleOwner) {
+        AppOpenAdManager.onAppBackgrounded()
+        NativeAdManager.onAppBackgrounded()
     }
 
     override fun onActivityStarted(activity: Activity) = Unit
@@ -79,20 +83,20 @@ class BoardmarkApplication :
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
 
-    // アプリ起動直後にUnity Ads等の全画面広告を出そうとすると、ホストActivityが
-    // まだウィンドウフォーカスを得ていないタイミングと競合し、黒画面のまま操作不能になる
-    // 不具合が発生していたため、Activityが確実にresumeし終えたこのタイミングまで待つ。
+    // アプリ起動直後に全画面広告を出そうとすると、ホストActivityがまだウィンドウ
+    // フォーカスを得ていないタイミングと競合し、黒画面のまま操作不能になる不具合が
+    // 発生していたため、Activityが確実にresumeし終えたこのタイミングまで待つ。
     // また、共有インテント受信用のShareReceiverActivity(透明・処理後すぐ自身をfinishする)
     // など、UIを持たない/一瞬で終了するActivity上に全画面広告を出すと、広告のウィンドウが
     // ホストを失って黒画面のまま残ってしまうため、必ずMainActivity上でのみ表示する。
     override fun onActivityResumed(activity: Activity) {
-        if (pendingAppOpenShow && activity is MainActivity) {
-            pendingAppOpenShow = false
-            InterstitialAdManager.maybeShow(activity, InterstitialAdManager.Trigger.APP_OPEN)
-        }
+        if (activity is MainActivity) AppOpenAdManager.onMainActivityResumed(activity)
     }
 
-    override fun onActivityPaused(activity: Activity) = Unit
+    override fun onActivityPaused(activity: Activity) {
+        if (activity is MainActivity) AppOpenAdManager.onMainActivityPaused()
+    }
+
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
     override fun onActivityDestroyed(activity: Activity) = Unit
 }

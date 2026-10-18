@@ -34,7 +34,7 @@ class BillingManager @Inject constructor(
 ) : PurchasesUpdatedListener {
 
     // Billing接続前でもすぐ判定できるよう、ローカルに保存済みの状態でまず初期化しておく。
-    private val _isAdFree = MutableStateFlow(AdFreeAccess.isAdFree(appContext))
+    private val _isAdFree = MutableStateFlow(AdFreeAccess.isPurchased(appContext))
     val isAdFree: StateFlow<Boolean> = _isAdFree.asStateFlow()
 
     private val _productDetails = MutableStateFlow<ProductDetails?>(null)

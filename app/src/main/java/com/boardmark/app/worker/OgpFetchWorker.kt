@@ -60,6 +60,8 @@ class OgpFetchWorker @AssistedInject constructor(
     companion object {
         const val KEY_BOOKMARK_ID = "bookmark_id"
         const val KEY_URL = "url"
-        const val MAX_ATTEMPTS = 3
+        // 共有直後はアプリ切り替えで通信が不安定なことが多いため、間隔を広げながら
+        // 数回やり直す(バックオフはBookmarkRepositoryImpl.enqueueOgpFetchで設定)。
+        const val MAX_ATTEMPTS = 5
     }
 }

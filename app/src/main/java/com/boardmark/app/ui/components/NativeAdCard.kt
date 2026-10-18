@@ -14,10 +14,14 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.boardmark.app.R
 import com.google.android.gms.ads.nativead.MediaView
@@ -28,6 +32,26 @@ import com.google.android.gms.ads.nativead.NativeAdView
 // 実View(classic Android View)として登録する必要がある。Composeのテキストは個別の
 // Viewとして参照できないため、このカードだけは純粋なAndroid Viewで組み立て、
 // AndroidView 1つとしてグリッドに埋め込む(見た目だけBookmarkCard/FolderTileに揃える)。
+
+// 横幅いっぱいの1行で表示する場合の画像の比率(一般的な横長ネイティブ広告の1.91:1)。
+private const val FullWidthMediaAspectRatio = 1.91f
+
+// 広告カードの枠線の内側の余白(dp)。
+private const val NativeAdCardInnerPaddingDp = 6f
+
+// AdMobの規定で、MediaViewは120x120dp以上でなければならない(動画の再生要件であり、
+// 満たさない枠は画像広告でも収益化の対象外になる)。
+private val MinMediaSize = 120.dp
+
+/**
+ * カード幅cardWidthのとき、広告カード内のMediaView(余白を除いた幅x
+ * CardThumbnailAspectRatioの高さ)がAdMobの最小サイズを満たすかどうか。
+ */
+internal fun nativeAdMediaFitsMinimumSize(cardWidth: Dp): Boolean {
+    val mediaWidth = cardWidth - (NativeAdCardInnerPaddingDp * 2).dp
+    val mediaHeight = mediaWidth / CardThumbnailAspectRatio
+    return mediaWidth >= MinMediaSize && mediaHeight >= MinMediaSize
+}
 
 internal fun Context.dpToPx(dp: Float): Int =
     TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, resources.displayMetrics).toInt()
@@ -44,6 +68,7 @@ internal class AspectRatioFrameLayout(context: Context, private val ratio: Float
 
 private class NativeAdViewHolder(
     val root: NativeAdView,
+    val cardBackground: GradientDrawable,
     val mediaFrame: AspectRatioFrameLayout,
     val badgeText: TextView,
     val headlineView: TextView,
@@ -51,10 +76,10 @@ private class NativeAdViewHolder(
     val ctaView: TextView,
 )
 
-private fun buildNativeAdView(context: Context, adBadgeLabel: String): NativeAdViewHolder {
+private fun buildNativeAdView(context: Context, adBadgeLabel: String, mediaAspectRatio: Float): NativeAdViewHolder {
     val cornerRadiusPx = context.dpToPx(12f).toFloat()
     val mediaView = MediaView(context)
-    val mediaFrame = AspectRatioFrameLayout(context, CardThumbnailAspectRatio).apply {
+    val mediaFrame = AspectRatioFrameLayout(context, mediaAspectRatio).apply {
         outlineProvider = ViewOutlineProvider.BACKGROUND
         clipToOutline = true
         background = GradientDrawable().apply { cornerRadius = cornerRadiusPx }
@@ -108,8 +133,15 @@ private fun buildNativeAdView(context: Context, adBadgeLabel: String): NativeAdV
         )
     }
 
+    // ブックマークのカードと見た目を揃えすぎると、リンクを開くつもりのタップが広告の
+    // クリックになってしまう(誤タップ=無効なクリック)。広告だけは枠線付きの別の地色に
+    // 載せ、一覧の中で広告だと一目で区別できるようにする。
+    val cardBackground = GradientDrawable().apply { cornerRadius = cornerRadiusPx }
     val column = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
+        background = cardBackground
+        val innerPadding = context.dpToPx(NativeAdCardInnerPaddingDp)
+        setPadding(innerPadding, innerPadding, innerPadding, innerPadding)
         addView(mediaFrame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         addView(
             headlineView,
@@ -134,11 +166,24 @@ private fun buildNativeAdView(context: Context, adBadgeLabel: String): NativeAdV
         this.callToActionView = ctaView
     }
 
-    return NativeAdViewHolder(nativeAdView, mediaFrame, badgeText, headlineView, bodyView, ctaView)
+    return NativeAdViewHolder(nativeAdView, cardBackground, mediaFrame, badgeText, headlineView, bodyView, ctaView)
+}
+
+/**
+ * fullWidth: 一覧の横幅いっぱいの1行として表示する場合はtrue。その場合は画像を一般的な
+ * 横長広告の比率(1.91:1)にして、1行が画面を占めすぎないようにする。
+ */
+@Composable
+fun NativeAdCard(nativeAd: NativeAd, fullWidth: Boolean, modifier: Modifier = Modifier) {
+    // 比率はView生成時に決まるため、表示形式が切り替わったらViewごと作り直す。
+    key(fullWidth) {
+        val ratio = if (fullWidth) FullWidthMediaAspectRatio else CardThumbnailAspectRatio
+        NativeAdCardContent(nativeAd, ratio, modifier)
+    }
 }
 
 @Composable
-fun NativeAdCard(nativeAd: NativeAd, modifier: Modifier = Modifier) {
+private fun NativeAdCardContent(nativeAd: NativeAd, mediaAspectRatio: Float, modifier: Modifier) {
     val adBadgeLabel = stringResource(R.string.native_ad_badge)
     val titleColor = MaterialTheme.colorScheme.onSurface.toArgb()
     val bodyColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
@@ -150,11 +195,14 @@ fun NativeAdCard(nativeAd: NativeAd, modifier: Modifier = Modifier) {
     val ctaBg = badgeBg
     val ctaFg = badgeFg
     val placeholderBg = MaterialTheme.colorScheme.surfaceVariant.toArgb()
+    val cardBg = MaterialTheme.colorScheme.surfaceContainerHigh.toArgb()
+    val cardStroke = MaterialTheme.colorScheme.outlineVariant.toArgb()
+    val cardStrokeWidth = with(LocalDensity.current) { 1.dp.roundToPx() }
 
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            val holder = buildNativeAdView(ctx, adBadgeLabel)
+            val holder = buildNativeAdView(ctx, adBadgeLabel, mediaAspectRatio)
             holder.root.tag = holder
             holder.root
         },
@@ -168,6 +216,8 @@ fun NativeAdCard(nativeAd: NativeAd, modifier: Modifier = Modifier) {
             holder.ctaView.setTextColor(ctaFg)
             (holder.ctaView.background as? GradientDrawable)?.setColor(ctaBg)
             (holder.mediaFrame.background as? GradientDrawable)?.setColor(placeholderBg)
+            holder.cardBackground.setColor(cardBg)
+            holder.cardBackground.setStroke(cardStrokeWidth, cardStroke)
 
             holder.headlineView.text = nativeAd.headline
             val bodyText = nativeAd.body ?: nativeAd.advertiser

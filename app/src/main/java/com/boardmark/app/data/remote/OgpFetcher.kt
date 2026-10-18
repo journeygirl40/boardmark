@@ -1,14 +1,18 @@
 package com.boardmark.app.data.remote
 
 import com.boardmark.app.util.RedirectUrlUnwrapper
-import java.io.IOException
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import org.json.JSONObject
 
 private const val MOBILE_USER_AGENT =
     "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 " +
@@ -27,45 +31,114 @@ private val EXCLUDED_DOMAINS = listOf(
     "googletagmanager.com", "facebook.com/tr", "scorecardresearch.com",
 )
 
-class OgpFetcher @Inject constructor(private val client: OkHttpClient) {
+/**
+ * ページHTMLの取得全体にかける時間の上限。YouTubeのように1ページ800KB前後あり、しかも
+ * og:タグが<head>ではなく本文の奥(600KB付近)に置かれているサイトもあるため、共通設定の
+ * 15秒ではモバイル回線で読み切れず時間切れになることがあった。
+ */
+private const val PAGE_CALL_TIMEOUT_SECONDS = 30L
+private const val PAGE_READ_TIMEOUT_SECONDS = 15L
 
+private val YOUTUBE_HOSTS = setOf("youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be")
+
+class OgpFetcher @Inject constructor(client: OkHttpClient) {
+
+    private val client: OkHttpClient = client.newBuilder()
+        .readTimeout(PAGE_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .callTimeout(PAGE_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .build()
+
+    /**
+     * 失敗(通信エラー・時間切れ・HTML解析中の例外など)はすべてOgpResult.Failureとして返し、
+     * 呼び出し側(OgpFetchWorker)の再試行に乗せる。例外をそのまま投げるとWorker自体が
+     * 異常終了して再試行されず、ブックマークが「取得待ち」のまま止まってしまうため。
+     */
     suspend fun fetch(url: String): OgpResult = withContext(Dispatchers.IO) {
         try {
             val targetUrl = RedirectUrlUnwrapper.unwrap(url)
-            val request = Request.Builder()
-                .url(targetUrl)
-                .header("User-Agent", MOBILE_USER_AGENT)
-                .header("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext OgpResult.Failure
-                val finalUrl = response.request.url.toString()
-                val body = response.body ?: return@withContext OgpResult.Failure
-
-                val doc = Jsoup.parse(body.byteStream(), null, finalUrl)
-
-                val image = doc.select("meta[property=og:image]").attr("abs:content")
-                    .ifBlank { doc.select("meta[name=twitter:image]").attr("abs:content") }
-                val title = doc.select("meta[property=og:title]").attr("content")
-                    .ifBlank { doc.title() }
-                val favicon = doc.select("link[rel~=(?i)^icon$]").attr("abs:href")
-                    .ifBlank { doc.select("link[rel~=(?i)shortcut icon]").attr("abs:href") }
-                val description = doc.select("meta[property=og:description]").attr("content")
-                    .ifBlank { doc.select("meta[name=description]").attr("content") }
-                val siteName = doc.select("meta[property=og:site_name]").attr("content")
-
-                OgpResult.Success(
-                    finalUrl = finalUrl,
-                    title = title.ifBlank { finalUrl },
-                    imageUrl = image.ifBlank { null },
-                    faviconUrl = favicon.ifBlank { null },
-                    description = description.ifBlank { null },
-                    siteName = siteName.ifBlank { null },
-                )
-            }
-        } catch (e: IOException) {
+            fetchYouTubeOEmbed(targetUrl) ?: fetchFromHtml(targetUrl)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             OgpResult.Failure
+        }
+    }
+
+    /**
+     * YouTubeの動画(通常・短縮URL・ショート)は、公式のoEmbed APIからタイトルとサムネイルを
+     * 取得する。HTMLを丸ごと読むより桁違いに小さく(数百バイト)速いため、回線が遅くても
+     * 取りこぼさない。チャンネルや再生リストなどoEmbed非対応のURLはnullを返し、通常の
+     * HTML取得に任せる。
+     */
+    private fun fetchYouTubeOEmbed(targetUrl: String): OgpResult? {
+        val parsed = targetUrl.toHttpUrlOrNull() ?: return null
+        if (parsed.host !in YOUTUBE_HOSTS) return null
+
+        val oEmbedUrl = "https://www.youtube.com/oembed".toHttpUrl().newBuilder()
+            .addQueryParameter("format", "json")
+            .addQueryParameter("url", targetUrl)
+            .build()
+        val json = client.newCall(Request.Builder().url(oEmbedUrl).build()).execute().use { response ->
+            if (!response.isSuccessful) return null
+            JSONObject(response.body?.string() ?: return null)
+        }
+        val title = json.optString("title").ifBlank { return null }
+        return OgpResult.Success(
+            finalUrl = targetUrl,
+            title = title,
+            imageUrl = json.optString("thumbnail_url").ifBlank { null }?.let(::preferHighResYouTubeThumbnail),
+            faviconUrl = "https://www.youtube.com/favicon.ico",
+            description = null,
+            siteName = json.optString("provider_name").ifBlank { null },
+        )
+    }
+
+    /**
+     * oEmbedが返すサムネイル(hqdefault: 4:3で上下に黒帯あり)より、og:imageと同じ
+     * 高解像度の16:9版(maxresdefault)を優先する。古い動画などmaxresdefaultが存在しない
+     * 場合もあるため、存在を確認できたときだけ差し替える。
+     */
+    private fun preferHighResYouTubeThumbnail(thumbnailUrl: String): String {
+        if (!thumbnailUrl.contains("/hqdefault.")) return thumbnailUrl
+        val maxRes = thumbnailUrl.replace("/hqdefault.", "/maxresdefault.")
+        val exists = runCatching {
+            client.newCall(Request.Builder().url(maxRes).head().build()).execute().use { it.isSuccessful }
+        }.getOrDefault(false)
+        return if (exists) maxRes else thumbnailUrl
+    }
+
+    private fun fetchFromHtml(targetUrl: String): OgpResult {
+        val request = Request.Builder()
+            .url(targetUrl)
+            .header("User-Agent", MOBILE_USER_AGENT)
+            .header("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
+            .build()
+
+        return client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return OgpResult.Failure
+            val finalUrl = response.request.url.toString()
+            val body = response.body ?: return OgpResult.Failure
+
+            val doc = Jsoup.parse(body.byteStream(), null, finalUrl)
+
+            val image = doc.select("meta[property=og:image]").attr("abs:content")
+                .ifBlank { doc.select("meta[name=twitter:image]").attr("abs:content") }
+            val title = doc.select("meta[property=og:title]").attr("content")
+                .ifBlank { doc.title() }
+            val favicon = doc.select("link[rel~=(?i)^icon$]").attr("abs:href")
+                .ifBlank { doc.select("link[rel~=(?i)shortcut icon]").attr("abs:href") }
+            val description = doc.select("meta[property=og:description]").attr("content")
+                .ifBlank { doc.select("meta[name=description]").attr("content") }
+            val siteName = doc.select("meta[property=og:site_name]").attr("content")
+
+            OgpResult.Success(
+                finalUrl = finalUrl,
+                title = title.ifBlank { finalUrl },
+                imageUrl = image.ifBlank { null },
+                faviconUrl = favicon.ifBlank { null },
+                description = description.ifBlank { null },
+                siteName = siteName.ifBlank { null },
+            )
         }
     }
 
@@ -115,7 +188,9 @@ class OgpFetcher @Inject constructor(private val client: OkHttpClient) {
 
                 candidates.take(MAX_CANDIDATE_IMAGES).toList()
             }
-        } catch (e: IOException) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             emptyList()
         }
     }

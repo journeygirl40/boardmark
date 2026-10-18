@@ -2,6 +2,14 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.Boardmark" parent="Theme.AppCompat.Light.NoActionBar" />
 
+    <!-- MainActivity起動時の起動画面(SplashScreen API)。アプリ起動広告の読み込み待ちの間も
+         この画面を出したままにする。表示後はpostSplashScreenThemeの通常テーマに切り替わる。 -->
+    <style name="Theme.Boardmark.Starting" parent="Theme.SplashScreen.IconBackground">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.Boardmark</item>
+    </style>
+
     <style name="Theme.Boardmark.Transparent" parent="Theme.Boardmark">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>

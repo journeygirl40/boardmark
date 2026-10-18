@@ -2,6 +2,7 @@ package com.boardmark.app.data.repository
 
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -82,7 +83,9 @@ class BookmarkRepositoryImpl @Inject constructor(
         val existing = bookmarkDao.findByOriginalUrl(url)
         if (existing != null) {
             bookmarkDao.updateAddedAt(existing.id, Instant.now())
-            if (existing.fetchStatus == FetchStatus.FAILED) {
+            // 取得に失敗したもの、または取得待ちのまま止まっているものは、もう一度共有された
+            // タイミングで取り直す(実行中の取得があれば置き換えるので重複はしない)。
+            if (existing.fetchStatus != FetchStatus.SUCCESS) {
                 enqueueOgpFetch(existing.id, existing.originalUrl)
             }
             return false
@@ -115,10 +118,10 @@ class BookmarkRepositoryImpl @Inject constructor(
             .setConstraints(
                 Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
             )
-            .setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
             .build()
 
-        workManager.enqueue(request)
+        workManager.enqueueUniqueWork("ogp_fetch_$bookmarkId", ExistingWorkPolicy.REPLACE, request)
     }
 
     override suspend fun updateFetchResult(

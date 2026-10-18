@@ -109,6 +109,15 @@
     <string name="remove_ads_purchased">Purchased. Ads are hidden.</string>
     <string name="remove_ads_price_fallback">¥500 (one-time)</string>
     <string name="remove_ads_price_format">%1$s (one-time)</string>
+    <string name="rewarded_ad_free_action">Hide ads for 24 hours</string>
+    <string name="rewarded_ad_free_summary">Watch a short video ad to hide all ads for 24 hours</string>
+    <string name="rewarded_ad_free_loading">Preparing the video…</string>
+    <string name="rewarded_ad_free_active">Ads are hidden until %1$s</string>
+    <string name="rewarded_ad_free_confirm_title">Watch a video ad?</string>
+    <string name="rewarded_ad_free_confirm_message">If you watch the video ad to the end, all ads will be hidden for 24 hours.</string>
+    <string name="rewarded_ad_free_confirm_ok">Watch</string>
+    <string name="rewarded_ad_free_granted">Ads are hidden for 24 hours</string>
+    <string name="rewarded_ad_free_unavailable">The video isn\'t ready yet. Please try again later.</string>
     <string name="label_management_action">Manage labels</string>
     <string name="label_management_summary">Add, rename, or delete labels</string>
     <string name="label_management_title">Manage labels</string>

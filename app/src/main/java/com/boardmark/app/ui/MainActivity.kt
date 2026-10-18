@@ -1,5 +1,6 @@
 package com.boardmark.app.ui
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -9,7 +10,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.boardmark.app.ads.AppOpenAdManager
 import com.boardmark.app.ads.ConsentManager
 import com.boardmark.app.billing.BillingManager
 import com.boardmark.app.ui.list.BookmarkListScreen
@@ -30,6 +33,10 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var billingManager: BillingManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // コールドスタート時は、アプリ起動広告の読み込みを待つ間(最大数秒)起動画面を
+        // 出したままにし、間に合えば起動画面から直接広告に切り替える(Google推奨の
+        // 「読み込み画面の間に起動広告を出す」形)。待つ必要がなければすぐ閉じる。
+        installSplashScreen().setKeepOnScreenCondition { AppOpenAdManager.shouldHoldSplash() }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
@@ -69,6 +76,15 @@ class MainActivity : AppCompatActivity() {
         // と競合してdecorの構築が壊れ、起動直後に極めて発生しやすい確率でクラッシュしていた
         // (NullPointerException in ComponentActivityKt.setContent /
         // "Window couldn't find content container view")。
-        ConsentManager.initializeAdsIfNeeded(this)
+        ConsentManager.gatherConsentAndInitialize(this)
+    }
+
+    // リンクを開く(startActivity)・ファイル選択(ActivityResultLauncher)など、この
+    // Activityから外部へ遷移する経路は最終的にすべてここを通るため、一箇所でまとめて
+    // 「アプリ自身が外へ送り出した」ことを記録し、戻ってきた直後の起動広告を抑止する。
+    @Deprecated("Deprecated in Java")
+    override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
+        AppOpenAdManager.notifyLeavingByOwnAction()
+        super.startActivityForResult(intent, requestCode, options)
     }
 }

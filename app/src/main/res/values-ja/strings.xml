@@ -109,6 +109,15 @@
     <string name="remove_ads_purchased">購入済み(広告は表示されません)</string>
     <string name="remove_ads_price_fallback">¥500(買い切り)</string>
     <string name="remove_ads_price_format">%1$s(買い切り)</string>
+    <string name="rewarded_ad_free_action">24時間広告を非表示にする</string>
+    <string name="rewarded_ad_free_summary">短い動画広告を見ると、24時間すべての広告が非表示になります</string>
+    <string name="rewarded_ad_free_loading">動画を準備しています…</string>
+    <string name="rewarded_ad_free_active">%1$s まで広告を非表示中</string>
+    <string name="rewarded_ad_free_confirm_title">動画広告を見ますか？</string>
+    <string name="rewarded_ad_free_confirm_message">動画広告を最後まで見ると、24時間すべての広告が非表示になります。</string>
+    <string name="rewarded_ad_free_confirm_ok">見る</string>
+    <string name="rewarded_ad_free_granted">24時間広告を非表示にしました</string>
+    <string name="rewarded_ad_free_unavailable">動画を準備できませんでした。しばらくしてからもう一度お試しください。</string>
     <string name="label_management_action">ラベル管理</string>
     <string name="label_management_summary">ラベルの登録・名前変更・削除</string>
     <string name="label_management_title">ラベル管理</string>

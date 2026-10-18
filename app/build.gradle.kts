@@ -27,8 +27,8 @@ android {
         applicationId = "com.journeygirl.boardmark"
         minSdk = 26
         targetSdk = 36
-        versionCode = 24
-        versionName = "24.0"
+        versionCode = 25
+        versionName = "25.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -121,9 +121,11 @@ dependencies {
 
     implementation(libs.androidx.browser)
     implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.core.splashscreen)
 
     implementation(libs.play.services.ads)
     implementation(libs.unity.ads)
+    implementation(libs.unity.mediation.adapter)
     implementation(libs.user.messaging.platform)
     implementation(libs.billing.ktx)
     implementation(libs.app.update.ktx)

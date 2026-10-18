@@ -16,8 +16,10 @@ jsoup = "1.18.3"
 coil = "3.0.4"
 browser = "1.8.0"
 appcompat = "1.7.0"
-playServicesAds = "24.5.0"
-unityAds = "4.19.0"
+playServicesAds = "25.5.0"
+unityAds = "4.21.0"
+unityMediationAdapter = "4.21.0.0"
+splashscreen = "1.0.1"
 userMessagingPlatform = "4.0.0"
 billing = "9.1.0"
 appUpdate = "2.1.0"
@@ -66,6 +68,8 @@ androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version
 
 play-services-ads = { group = "com.google.android.gms", name = "play-services-ads", version.ref = "playServicesAds" }
 unity-ads = { group = "com.unity3d.ads", name = "unity-ads", version.ref = "unityAds" }
+unity-mediation-adapter = { group = "com.google.ads.mediation", name = "unity", version.ref = "unityMediationAdapter" }
+androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
 user-messaging-platform = { group = "com.google.android.ump", name = "user-messaging-platform", version.ref = "userMessagingPlatform" }
 billing-ktx = { group = "com.android.billingclient", name = "billing-ktx", version.ref = "billing" }
 app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "appUpdate" }

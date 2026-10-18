@@ -2,10 +2,8 @@ package com.boardmark.app.ads
 
 import android.app.Activity
 import android.content.Context
-import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
-import androidx.core.content.edit
 import com.boardmark.app.BuildConfig
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
@@ -13,10 +11,6 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
-import com.unity3d.ads.IUnityAdsLoadListener
-import com.unity3d.ads.IUnityAdsShowListener
-import com.unity3d.ads.UnityAds
-import com.unity3d.ads.UnityAdsShowOptions
 import kotlin.random.Random
 
 // デバッグビルドはGoogle公式のテスト用ID、リリースビルドは本番IDを使う。
@@ -25,15 +19,6 @@ private val INTERSTITIAL_AD_UNIT_ID = if (BuildConfig.DEBUG) {
 } else {
     "ca-app-pub-3334691626809528/9008469354"
 }
-
-private const val PREFS_NAME = "boardmark_prefs"
-private const val KEY_LAST_SHOWN_AT = "interstitial_last_shown_at"
-
-/** 前回表示から最低これだけ間隔を空ける(トリガー種別に関わらず共通のクールダウン)。 */
-private const val COOLDOWN_MILLIS = 3 * 60 * 1000L
-
-/** アプリ起動時のみ、この分の1の確率でしか表示しない(5回に1回程度)。 */
-private const val APP_OPEN_FREQUENCY = 5
 
 /**
  * サムネイル更新の「重み」の母数。1件更新なら10回に1回、itemCount件分まとめて更新した
@@ -54,41 +39,25 @@ private const val IMPORT_EQUIVALENT_ITEM_COUNT = 5
 private const val AD_EXPIRATION_MILLIS = 50 * 60 * 1000L
 
 /**
- * UnityAds.show()呼び出し後、この時間内に描画開始(onUnityAdsShowStart)も結果通知
- * (Failure/Complete)も一切来ない場合、SDK内部で処理が詰まっていると判断し、次回以降
- * また広告を出せるよう強制的に読み込みをやり直す(コールバックが永久に来ないまま
- * unityAdReadyがfalseに固まり、以後フォールバックが機能しなくなることの再発防止)。
+ * InterstitialAd.show()呼び出し後、この時間内にFullScreenContentCallbackのいずれの
+ * コールバック(表示成功/失敗/終了)も来ない場合の保護。アプリ復帰直後のウィンドウ遷移と
+ * ごく稀に競合し黒画面のまま操作不能になることがあるため、強制的に状態を戻す。
  */
-private const val UNITY_SHOW_WATCHDOG_MILLIS = 10 * 1000L
+private const val SHOW_WATCHDOG_MILLIS = 10 * 1000L
+
+/** 描画開始の通知後も、終了/失敗が一切来ない場合の保護(動画広告の再生分の猶予を持たせる)。 */
+private const val SHOW_POST_START_WATCHDOG_MILLIS = 45 * 1000L
 
 /**
- * 描画開始(onUnityAdsShowStart)は通知されたのに、その後Complete/Failureのどちらも
- * 一切来ない場合の保護。開始後は計測ping・追加アセット取得などSDK内部の処理が
- * 続くため、開始前のUNITY_SHOW_WATCHDOG_MILLISより長い猶予を持たせる
- * (正常に再生中の動画/プレイアブル広告を誤って強制回収しないため)。
- */
-private const val UNITY_SHOW_POST_START_WATCHDOG_MILLIS = 45 * 1000L
-
-/**
- * AdMob側のInterstitialAd.show()呼び出し後、この時間内にFullScreenContentCallbackの
- * いずれのコールバック(表示成功/失敗/終了)も来ない場合の保護。AdMobは通常watchdog不要
- * だが、アプリ復帰直後のウィンドウ遷移とごく稀に競合し黒画面のまま操作不能になる
- * (Unity Ads側でUNITY_SHOW_WATCHDOG_MILLISとして対処済みの不具合と同種)ことがあるため、
- * AdMob側にも同じ保護を入れる。
- */
-private const val ADMOB_SHOW_WATCHDOG_MILLIS = 10 * 1000L
-
-/** AdMob版のUNITY_SHOW_POST_START_WATCHDOG_MILLIS。開始通知後も同様の保護を行う。 */
-private const val ADMOB_SHOW_POST_START_WATCHDOG_MILLIS = 45 * 1000L
-
-/**
- * インタースティシャル(全画面)広告を、自然な区切り(アプリ起動・インポート・エクスポート・
- * サムネイル更新)でのみ表示する。ブックマークを開く操作など、ユーザーの主要な操作の
- * 妨げにはならない箇所でのみ呼び出すこと。
+ * インタースティシャル(全画面)広告を、ユーザーの作業がひと区切りついた自然な切れ目
+ * (インポート・エクスポート・サムネイル更新の完了直後)でのみ表示する。
+ * アプリ起動時はアプリ起動広告(AppOpenAdManager)の担当で、インタースティシャルは
+ * 出さない(起動時のインタースティシャルはAdMobのポリシーで非推奨のため)。
+ * 他のネットワーク(Unity Ads等)の在庫は、AdMobメディエーションの入札で自動的に競合する。
  */
 object InterstitialAdManager {
 
-    enum class Trigger { APP_OPEN, IMPORT, EXPORT, THUMBNAIL_UPDATE }
+    enum class Trigger { IMPORT, EXPORT, THUMBNAIL_UPDATE }
 
     private var loadedAd: InterstitialAd? = null
     private var loadedAt: Long = 0L
@@ -96,18 +65,14 @@ object InterstitialAdManager {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    // AdMob側が読み込めなかった場合(no-fillだけでなくSDK自体が機能しない場合も含む)の
-    // 独立したフォールバック用に、Unity Ads側の読み込み済み状態を別途保持する。
-    private var unityAdReady = false
-    private var isUnityLoading = false
-
     private fun isLoadedAdStale(): Boolean =
         loadedAd != null && System.currentTimeMillis() - loadedAt >= AD_EXPIRATION_MILLIS
 
     fun preload(context: Context) {
         // 期限切れの広告は「読み込み済み」扱いにせず、必ず新しいものに差し替える。
         if (isLoadedAdStale()) loadedAd = null
-        if (AdFreeAccess.isAdFree(context) || isLoading || loadedAd != null) return
+        if (!ConsentManager.isAdsReady.value || AdFreeAccess.isAdFree(context)) return
+        if (isLoading || loadedAd != null) return
         isLoading = true
         InterstitialAd.load(
             context.applicationContext,
@@ -123,88 +88,55 @@ object InterstitialAdManager {
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     isLoading = false
                     loadedAd = null
-                    preloadUnityFallback(context)
-                }
-            },
-        )
-    }
-
-    private fun preloadUnityFallback(context: Context) {
-        if (unityAdReady || isUnityLoading || !UnityAdsManager.isReady()) return
-        isUnityLoading = true
-        UnityAds.load(
-            UnityAdsManager.INTERSTITIAL_PLACEMENT_ID,
-            object : IUnityAdsLoadListener {
-                override fun onUnityAdsAdLoaded(placementId: String) {
-                    isUnityLoading = false
-                    unityAdReady = true
-                }
-
-                override fun onUnityAdsFailedToLoad(
-                    placementId: String,
-                    error: UnityAds.UnityAdsLoadError,
-                    message: String,
-                ) {
-                    isUnityLoading = false
-                    unityAdReady = false
                 }
             },
         )
     }
 
     /**
-     * クールダウンと、トリガーごとの確率判定を満たしていれば表示する。
+     * 全画面広告共通のクールダウンと、トリガーごとの確率判定を満たしていれば表示する。
      * itemCountはTHUMBNAIL_UPDATEでのみ意味を持ち、まとめて更新した件数を渡す
      * (例: 複数選択で10件更新した場合はitemCount=10。10件以上ならほぼ確定表示になる)。
-     * EXPORTは確率判定なしの必須表示、IMPORTは実際の件数によらず常に
-     * THUMBNAIL_UPDATEの5件分相当の重みで判定する。
-     * 広告の読み込みが間に合っていない場合は何もしない(ユーザーの操作を待たせない)。
+     * EXPORTは確率判定なし、IMPORTは実際の件数によらず常にTHUMBNAIL_UPDATEの
+     * 5件分相当の重みで判定する。
+     * 操作の完了と同時に呼ぶこと(遅延させて呼ぶと、ユーザーが次の操作をしようとした
+     * 瞬間に広告が割り込み、誤タップの原因になる)。読み込みが間に合っていない場合は
+     * 何もしない(ユーザーの操作を待たせない)。
      */
     fun maybeShow(activity: Activity, trigger: Trigger, itemCount: Int = 1) {
         // Activityが破棄中/終了中の状態で全画面広告を出そうとすると、ウィンドウ遷移が
         // 競合し黒画面のまま操作不能になることがあるため、表示可能な状態でなければ諦める。
         if (activity.isFinishing || activity.isDestroyed) return
         if (AdFreeAccess.isAdFree(activity)) return
-        val prefs = activity.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val now = System.currentTimeMillis()
-        if (now - prefs.getLong(KEY_LAST_SHOWN_AT, 0L) < COOLDOWN_MILLIS) return
+        if (!FullScreenAdGate.canShow(activity)) return
         when (trigger) {
-            Trigger.APP_OPEN -> if (Random.nextInt(APP_OPEN_FREQUENCY) != 0) return
             Trigger.THUMBNAIL_UPDATE -> if (Random.nextInt(THUMBNAIL_UPDATE_FREQUENCY) >= itemCount) return
             Trigger.IMPORT -> if (Random.nextInt(THUMBNAIL_UPDATE_FREQUENCY) >= IMPORT_EQUIVALENT_ITEM_COUNT) return
-            Trigger.EXPORT -> Unit // 必須表示: 確率判定なし
+            Trigger.EXPORT -> Unit // 確率判定なし
         }
 
         if (isLoadedAdStale()) loadedAd = null
         val ad = loadedAd
         if (ad == null) {
-            if (unityAdReady) {
-                showUnityFallback(activity, prefs)
-            } else {
-                // 広告が無い(未読み込み・期限切れ)場合は今回は表示を諦めるが、次の機会には
-                // 表示できるよう、ここで改めて読み込みをキックしておく。
-                preload(activity)
-            }
+            // 広告が無い(未読み込み・期限切れ)場合は今回は表示を諦めるが、次の機会には
+            // 表示できるよう、ここで改めて読み込みをキックしておく。
+            preload(activity)
             return
         }
+        loadedAd = null
+        FullScreenAdGate.isShowing = true
+
         // resolved済みかどうかをウォッチドッグとコールバックの両方から参照するため、
         // 呼び出しごとに新しいフラグ/Runnableを作る(前回分の状態を引きずらないように)。
         var resolved = false
-        val watchdog = Runnable {
-            if (!resolved) {
-                resolved = true
-                loadedAd = null
-                preload(activity)
-            }
+        fun resolve() {
+            resolved = true
+            FullScreenAdGate.isShowing = false
+            preload(activity)
         }
-        mainHandler.postDelayed(watchdog, ADMOB_SHOW_WATCHDOG_MILLIS)
-        val postStartWatchdog = Runnable {
-            if (!resolved) {
-                resolved = true
-                loadedAd = null
-                preload(activity)
-            }
-        }
+        val watchdog = Runnable { if (!resolved) resolve() }
+        val postStartWatchdog = Runnable { if (!resolved) resolve() }
+        mainHandler.postDelayed(watchdog, SHOW_WATCHDOG_MILLIS)
 
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
             // 描画が実際に始まったことが確認できたので、開始前ウォッチドッグは解除するが、
@@ -212,90 +144,26 @@ object InterstitialAdManager {
             // より長い猶予の第二段階ウォッチドッグに切り替える。
             override fun onAdShowedFullScreenContent() {
                 mainHandler.removeCallbacks(watchdog)
-                mainHandler.postDelayed(postStartWatchdog, ADMOB_SHOW_POST_START_WATCHDOG_MILLIS)
+                mainHandler.postDelayed(postStartWatchdog, SHOW_POST_START_WATCHDOG_MILLIS)
             }
+
+            override fun onAdClicked() = AppOpenAdManager.notifyLeavingByOwnAction()
 
             override fun onAdDismissedFullScreenContent() {
                 if (resolved) return
-                resolved = true
                 mainHandler.removeCallbacks(watchdog)
                 mainHandler.removeCallbacks(postStartWatchdog)
-                loadedAd = null
-                prefs.edit { putLong(KEY_LAST_SHOWN_AT, System.currentTimeMillis()) }
-                preload(activity)
+                FullScreenAdGate.markShown(activity)
+                resolve()
             }
 
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
                 if (resolved) return
-                resolved = true
                 mainHandler.removeCallbacks(watchdog)
                 mainHandler.removeCallbacks(postStartWatchdog)
-                loadedAd = null
-                preload(activity)
+                resolve()
             }
         }
         ad.show(activity)
-    }
-
-    private fun showUnityFallback(activity: Activity, prefs: SharedPreferences) {
-        unityAdReady = false
-
-        // resolved済みかどうかをウォッチドッグとコールバックの両方から参照するため、
-        // 呼び出しごとに新しいフラグ/Runnableを作る(前回分の状態を引きずらないように)。
-        var resolved = false
-        val watchdog = Runnable {
-            if (!resolved) {
-                resolved = true
-                preload(activity)
-            }
-        }
-        mainHandler.postDelayed(watchdog, UNITY_SHOW_WATCHDOG_MILLIS)
-        val postStartWatchdog = Runnable {
-            if (!resolved) {
-                resolved = true
-                preload(activity)
-            }
-        }
-
-        UnityAds.show(
-            activity,
-            UnityAdsManager.INTERSTITIAL_PLACEMENT_ID,
-            UnityAdsShowOptions(),
-            object : IUnityAdsShowListener {
-                override fun onUnityAdsShowFailure(
-                    placementId: String,
-                    error: UnityAds.UnityAdsShowError,
-                    message: String,
-                ) {
-                    if (resolved) return
-                    resolved = true
-                    mainHandler.removeCallbacks(watchdog)
-                    mainHandler.removeCallbacks(postStartWatchdog)
-                    preload(activity)
-                }
-
-                // 描画が実際に始まったことが確認できたので、開始前ウォッチドッグは解除するが、
-                // その後Complete/Failureのどちらも来ないまま詰まるケースに備え、
-                // より長い猶予の第二段階ウォッチドッグに切り替える。
-                override fun onUnityAdsShowStart(placementId: String) {
-                    mainHandler.removeCallbacks(watchdog)
-                    mainHandler.postDelayed(postStartWatchdog, UNITY_SHOW_POST_START_WATCHDOG_MILLIS)
-                }
-
-                override fun onUnityAdsShowClick(placementId: String) = Unit
-
-                override fun onUnityAdsShowComplete(
-                    placementId: String,
-                    state: UnityAds.UnityAdsShowCompletionState,
-                ) {
-                    if (resolved) return
-                    resolved = true
-                    mainHandler.removeCallbacks(watchdog)
-                    mainHandler.removeCallbacks(postStartWatchdog)
-                    prefs.edit { putLong(KEY_LAST_SHOWN_AT, System.currentTimeMillis()) }
-                    preload(activity)
-                }
-            },
-        )
     }
 }

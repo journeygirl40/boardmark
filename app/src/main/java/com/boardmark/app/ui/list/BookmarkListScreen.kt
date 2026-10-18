@@ -46,6 +46,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -97,6 +98,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -131,6 +133,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.boardmark.app.R
 import com.boardmark.app.ads.AdFreeAccess
+import com.boardmark.app.ads.ConsentManager
 import com.boardmark.app.ads.BannerAd
 import com.boardmark.app.ads.InterstitialAdManager
 import com.boardmark.app.ads.NativeAdManager
@@ -151,6 +154,7 @@ import com.boardmark.app.ui.components.GridVerticalSpacing
 import com.boardmark.app.ui.components.MilestoneCelebration
 import com.boardmark.app.ui.components.FolderTile
 import com.boardmark.app.ui.components.NativeAdCard
+import com.boardmark.app.ui.components.nativeAdMediaFitsMinimumSize
 import com.boardmark.app.ui.components.MoveToFolderDialog
 import com.boardmark.app.ui.components.NewFolderDialog
 import com.boardmark.app.ui.components.RenameBookmarkDialog
@@ -170,14 +174,34 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-// ネイティブ広告の挿入間隔。最初の広告は先頭からNativeAdFirstIndex件目に挿入し、
-// 以降はNativeAdRepeatInterval件おきに(一覧が長い場合のみ)繰り返し挿入する。
+// ネイティブ広告の挿入間隔(カード1枚分の大きさで表示する場合)。最初の広告は先頭から
+// NativeAdFirstIndex件目に挿入し、以降はNativeAdRepeatInterval件おきに一覧の最後まで挿入する。
 // パーソナルなブックマーク管理という性質上、コンテンツフィード的なアプリより
 // 控えめな頻度・上限にしている。ネイティブ広告はクリック課金より表示課金(eCPM)
 // 由来の収益が主なため、間隔を詰めて視認インプレッションを増やす方が収益に直結する。
-// 挿入枚数はnativeAds(NativeAdManagerが保持する広告在庫)の件数を超えない。
 private const val NativeAdFirstIndex = 4
 private const val NativeAdRepeatInterval = 6
+
+// 横幅いっぱいの1行で表示する場合の間隔(行数)。最初の広告は先頭からNativeAdFirstRows行の後、
+// 以降はNativeAdRepeatRows行おきに挿入する(1行の広告はカード1枚より大きいため間隔を広めにとる)。
+private const val NativeAdFirstRows = 2
+private const val NativeAdRepeatRows = 4
+
+/**
+ * ネイティブ広告の枠の並び方。slot番目の枠は、元の一覧(広告を含まない)の
+ * positionOf(slot)番目の項目の直前に挿入する。
+ */
+private data class NativeAdSlotLayout(val first: Int, val interval: Int) {
+    fun positionOf(slot: Int): Int = first + slot * interval
+
+    /** 元の一覧の位置from〜to(両端含む)の間に挿入位置がある枠の番号。 */
+    fun slotsBetween(from: Int, to: Int): IntRange {
+        if (to < first) return IntRange.EMPTY
+        val start = if (from <= first) 0 else (from - first + interval - 1) / interval
+        val end = (to - first) / interval
+        return start..end
+    }
+}
 
 private data class FolderTarget(val id: Long, val name: String)
 
@@ -256,18 +280,17 @@ fun BookmarkListScreen(
         }
     }
 
-    // サムネイル更新開始の2秒後に、件数に応じた確率でインタースティシャル広告を出す。
+    // サムネイル更新の操作が完了した瞬間に、件数に応じた確率でインタースティシャル広告を出す。
     // itemCountが10件以上(複数選択の一括更新)の場合はほぼ確定表示になる。
+    // 遅らせて出すと、ユーザーが次のカードをタップしようとした瞬間に割り込んで
+    // 誤タップ(無効なクリック)の原因になるため、操作の区切りと同時に出す。
     fun maybeShowThumbnailUpdateAd(itemCount: Int) {
         val activity = context as? Activity ?: return
-        screenScope.launch {
-            delay(2000)
-            InterstitialAdManager.maybeShow(
-                activity,
-                InterstitialAdManager.Trigger.THUMBNAIL_UPDATE,
-                itemCount = itemCount,
-            )
-        }
+        InterstitialAdManager.maybeShow(
+            activity,
+            InterstitialAdManager.Trigger.THUMBNAIL_UPDATE,
+            itemCount = itemCount,
+        )
     }
 
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -709,40 +732,77 @@ fun BookmarkListScreen(
             } else {
                 // ネイティブ広告は表示専用の枠として、業務データ(uiState.gridItems)には
                 // 混ぜずに画面側だけで挿入する。フォルダの中では挿入しない
-                // (広告だけが目立ってしまうため)。一覧が長いほどNativeAdRepeatInterval
-                // 件おきに繰り返し挿入するが、広告の在庫(nativeAds)を超えては挿入しない。
-                val nativeAds by NativeAdManager.nativeAds.collectAsState()
-                var isAdFree by remember { mutableStateOf(AdFreeAccess.isAdFree(context)) }
-                // 一覧の長さから必要な広告枠数を逆算し、在庫(nativeAds)が足りなければ
-                // NativeAdManagerに追加読み込みを申告する。フォルダ内では広告を挿入
-                // しないため、フォルダ表示中はこの計算・申告を行わない
-                // (トップレベルに戻った時点で改めて計算・申告される)。
-                val desiredAdSlots = if (uiState.currentFolderId != null || uiState.gridItems.size < NativeAdFirstIndex) {
-                    0
-                } else {
-                    (uiState.gridItems.size - NativeAdFirstIndex) / NativeAdRepeatInterval + 1
-                }
-                LaunchedEffect(desiredAdSlots, isAdFree) {
-                    if (!isAdFree && desiredAdSlots > 0) {
-                        NativeAdManager.ensureCapacity(context, desiredAdSlots)
+                // (広告だけが目立ってしまうため)。枠は一覧の最後まで一定間隔で並べ、
+                // 実際に広告を入れるのはNativeAdManagerが割り当てた枠だけにする。
+                val assignedAds by NativeAdManager.assignedAds.collectAsState()
+                val isAdFree by AdFreeAccess.isAdFreeFlow.collectAsState()
+                val isAdsReady by ConsentManager.isAdsReady.collectAsState()
+                val adsEnabled = isAdsReady && !isAdFree && uiState.currentFolderId == null
+                // ネイティブ広告のMediaViewは120x120dp以上が必要(AdMobの規定。満たさない枠は
+                // 収益化対象外になる)。列数が多くカード1枚分では足りない場合は、広告だけ
+                // 横幅いっぱいの1行として表示し、枠の位置を行の先頭(列数の倍数)に揃える。
+                val cardWidth = (maxWidth - GridContentPadding * 2 - GridHorizontalSpacing * (columnCount - 1)) /
+                    columnCount
+                val adSpansFullRow = !nativeAdMediaFitsMinimumSize(cardWidth)
+                val adSlotLayout = remember(adSpansFullRow, columnCount) {
+                    if (adSpansFullRow) {
+                        NativeAdSlotLayout(
+                            first = columnCount * NativeAdFirstRows,
+                            interval = columnCount * NativeAdRepeatRows,
+                        )
+                    } else {
+                        NativeAdSlotLayout(first = NativeAdFirstIndex, interval = NativeAdRepeatInterval)
                     }
                 }
-                val displayItems = remember(uiState.gridItems, nativeAds, isAdFree, uiState.currentFolderId) {
-                    if (isAdFree || nativeAds.isEmpty() || uiState.currentFolderId != null ||
-                        uiState.gridItems.size < NativeAdFirstIndex
-                    ) {
+                val displayItems = remember(uiState.gridItems, assignedAds, adsEnabled, adSlotLayout) {
+                    if (!adsEnabled || assignedAds.isEmpty()) {
                         uiState.gridItems
                     } else {
                         uiState.gridItems.toMutableList().apply {
-                            for (slot in nativeAds.indices) {
-                                val originalIndex = NativeAdFirstIndex + slot * NativeAdRepeatInterval
-                                if (originalIndex > uiState.gridItems.size) break
-                                add(originalIndex + slot, BookmarkGridItem.NativeAdItem(slot))
+                            var inserted = 0
+                            for (slot in assignedAds.keys.sorted()) {
+                                val position = adSlotLayout.positionOf(slot)
+                                if (position >= uiState.gridItems.size) break
+                                add(position + inserted, BookmarkGridItem.NativeAdItem(slot))
+                                inserted++
                             }
                         }
                     }
                 }
                 val currentItems by rememberUpdatedState(displayItems)
+
+                // スクロール位置を見て、今見えている範囲の前後1画面分にある枠の広告を
+                // NativeAdManagerに申告する(次のスクロールで見えるあたりに近づいたら読み込む)。
+                // 一覧を開いてからユーザーが最初に触れるまで(最大数秒)は、画面内の枠にも広告を
+                // 入れてよい(NativeAdManager参照)。触れた後は画面外の枠にだけ入れる。
+                val listShownAt = remember(uiState.currentFolderId, adSlotLayout) { System.currentTimeMillis() }
+                LaunchedEffect(adsEnabled, adSlotLayout, listShownAt) {
+                    if (!adsEnabled) return@LaunchedEffect
+                    snapshotFlow {
+                        val visible = gridState.layoutInfo.visibleItemsInfo
+                        Triple(visible.firstOrNull()?.index, visible.lastOrNull()?.index, uiState.gridItems.size)
+                    }.collect { (firstIndex, lastIndex, contentSize) ->
+                        if (firstIndex == null || lastIndex == null) return@collect
+                        val items = currentItems
+                        fun contentCountBefore(displayIndex: Int): Int =
+                            items.subList(0, displayIndex.coerceIn(0, items.size)).count { it !is BookmarkGridItem.NativeAdItem }
+                        val firstContent = contentCountBefore(firstIndex)
+                        val lastContentExclusive = contentCountBefore(lastIndex + 1)
+                        val viewport = (lastContentExclusive - firstContent).coerceAtLeast(adSlotLayout.interval)
+                        val slotRange = adSlotLayout.slotsBetween(
+                            from = firstContent - viewport,
+                            to = minOf(lastContentExclusive + viewport, contentSize - 1),
+                        )
+                        val visibleSlots = adSlotLayout.slotsBetween(firstContent, lastContentExclusive).toSet()
+                        NativeAdManager.requestSlots(
+                            context = context,
+                            wanted = slotRange.toList(),
+                            visible = visibleSlots,
+                            focus = adSlotLayout.slotsBetween(0, firstContent).lastOrNull() ?: 0,
+                            listShownAt = listShownAt,
+                        )
+                    }
+                }
                 val selectionModeState by rememberUpdatedState(uiState.isSelectionMode)
                 val selectedIdsState by rememberUpdatedState(uiState.selectedIds)
 
@@ -759,6 +819,14 @@ fun BookmarkListScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .clearFocusOnTap()
+                        // 最初に触れた時点で、画面内の枠への広告の割り込みを打ち切る(上の説明参照)。
+                        // タップ等の判定を邪魔しないよう、イベントは消費せず観察だけする。
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                NativeAdManager.closeInitialPlacementWindow()
+                            }
+                        }
                         .pointerInput(Unit) {
                             coroutineScope {
                                 // タップ: フォルダを開く / URLを開く / 選択トグル。
@@ -899,6 +967,13 @@ fun BookmarkListScreen(
                     items(
                         displayItems,
                         key = { it.key },
+                        span = { item ->
+                            if (item is BookmarkGridItem.NativeAdItem && adSpansFullRow) {
+                                GridItemSpan(maxLineSpan)
+                            } else {
+                                GridItemSpan(1)
+                            }
+                        },
                         // フォルダとブックマークで構成が全く異なるため、種別ごとにcontentTypeを
                         // 分けることで、スクロールでアイテムが入れ替わる際のコンポジション再利用の
                         // 効率を上げる(異なる種別同士では再利用されず、同種別間でのみ再利用される)。
@@ -949,8 +1024,12 @@ fun BookmarkListScreen(
                                 )
                             }
                             is BookmarkGridItem.NativeAdItem -> {
-                                nativeAds.getOrNull(item.slotIndex)?.let { ad ->
-                                    NativeAdCard(nativeAd = ad, modifier = Modifier.animateItem())
+                                assignedAds[item.slotIndex]?.let { ad ->
+                                    NativeAdCard(
+                                        nativeAd = ad,
+                                        fullWidth = adSpansFullRow,
+                                        modifier = Modifier.animateItem(),
+                                    )
                                 }
                             }
                         }

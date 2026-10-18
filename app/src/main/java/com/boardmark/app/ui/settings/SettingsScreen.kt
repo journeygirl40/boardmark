@@ -3,6 +3,7 @@ package com.boardmark.app.ui.settings
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.text.format.DateUtils
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,11 +23,13 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,8 +37,10 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,8 +52,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.boardmark.app.R
+import com.boardmark.app.ads.AdFreeAccess
 import com.boardmark.app.ads.ConsentManager
 import com.boardmark.app.ads.InterstitialAdManager
+import com.boardmark.app.ads.RewardedAdManager
 import com.boardmark.app.ui.components.BrowserPickerDialog
 import com.boardmark.app.ui.components.LanguagePickerDialog
 import com.boardmark.app.util.AppLanguage
@@ -74,6 +81,11 @@ fun SettingsScreen(
     var defaultBrowserPackage by remember { mutableStateOf(viewModel.getDefaultBrowser()) }
     val isAdFree by viewModel.billingManager.isAdFree.collectAsState()
     val adFreeProductDetails by viewModel.billingManager.productDetails.collectAsState()
+    // リワード広告による期間限定の非表示(購入済みの場合はそもそも導線を出さない)。
+    val isAnyAdFree by AdFreeAccess.isAdFreeFlow.collectAsState()
+    val isRewardedAdLoaded by RewardedAdManager.isAdLoaded.collectAsState()
+    var rewardedConfirmVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { RewardedAdManager.preload(context) }
 
     // ヘルプ/ラベル管理はダイアログではなく全画面差し替えなので、システムの戻るボタンで
     // 設定画面に戻れるよう明示的に処理する(何もしないとアプリごと閉じる挙動になる)。
@@ -216,6 +228,47 @@ fun SettingsScreen(
                     }
                 },
             )
+            if (!isAdFree && RewardedAdManager.isConfigured) {
+                val rewardActive = isAnyAdFree
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.rewarded_ad_free_action)) },
+                    supportingContent = {
+                        Text(
+                            when {
+                                rewardActive -> stringResource(
+                                    R.string.rewarded_ad_free_active,
+                                    DateUtils.formatDateTime(
+                                        context,
+                                        AdFreeAccess.rewardedAdFreeUntil(context),
+                                        DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME,
+                                    ),
+                                )
+                                isRewardedAdLoaded -> stringResource(R.string.rewarded_ad_free_summary)
+                                else -> stringResource(R.string.rewarded_ad_free_loading)
+                            },
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            if (rewardActive) Icons.Filled.CheckCircle else Icons.Filled.OndemandVideo,
+                            contentDescription = null,
+                            tint = if (rewardActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    modifier = if (rewardActive) {
+                        Modifier
+                    } else {
+                        Modifier.clickable {
+                            if (isRewardedAdLoaded) {
+                                rewardedConfirmVisible = true
+                            } else {
+                                RewardedAdManager.preload(context)
+                                Toast.makeText(context, R.string.rewarded_ad_free_unavailable, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                )
+            }
             ListItem(
                 headlineContent = { Text(stringResource(R.string.help_action)) },
                 leadingContent = { Icon(Icons.Filled.HelpOutline, contentDescription = null) },
@@ -294,6 +347,32 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+
+    // 特典の内容(何を見ると何がもらえるか)を、広告を見る前に必ず明示する(AdMobのポリシー)。
+    if (rewardedConfirmVisible) {
+        AlertDialog(
+            onDismissRequest = { rewardedConfirmVisible = false },
+            title = { Text(stringResource(R.string.rewarded_ad_free_confirm_title)) },
+            text = { Text(stringResource(R.string.rewarded_ad_free_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    rewardedConfirmVisible = false
+                    val activity = context as? Activity ?: return@TextButton
+                    val shown = RewardedAdManager.show(activity) {
+                        Toast.makeText(context, R.string.rewarded_ad_free_granted, Toast.LENGTH_SHORT).show()
+                    }
+                    if (!shown) {
+                        Toast.makeText(context, R.string.rewarded_ad_free_unavailable, Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text(stringResource(R.string.rewarded_ad_free_confirm_ok)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { rewardedConfirmVisible = false }) {
+                    Text(stringResource(R.string.delete_confirm_cancel))
+                }
+            },
+        )
     }
 
     if (languagePickerVisible) {
